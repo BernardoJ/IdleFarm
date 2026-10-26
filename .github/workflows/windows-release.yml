@@ -37,7 +37,14 @@ jobs:
       - name: Capture six environments during day and night
         env:
           QT_QPA_PLATFORM: offscreen
-        run: python tools/validate.py --output qa-output/visual
+        shell: pwsh
+        run: |
+          foreach ($scale in @('1', '1.25', '1.5', '2')) {
+            $env:QT_SCALE_FACTOR = $scale
+            python tools/validate.py --output "qa-output/visual-$scale"
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+          Remove-Item Env:QT_SCALE_FACTOR
       - name: Build real Windows executable
         run: python -m PyInstaller --noconfirm --clean IdleFarm.spec
       - name: Smoke-test the Windows executable and compute SHA-256

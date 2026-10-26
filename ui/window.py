@@ -5,7 +5,7 @@ from datetime import datetime
 import math
 import time
 from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QIcon, QPixmap
+from PySide6.QtGui import QFontMetrics, QIcon, QPixmap
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
@@ -118,6 +118,9 @@ class FarmWindow(QMainWindow):
             button = QPushButton(NAMES[key])
             button.setCheckable(True)
             button.setObjectName("tab_" + key)
+            button.ensurePolished()
+            # Native Windows font metrics can differ from Linux despite the same QSS.
+            button.setMinimumWidth(QFontMetrics(button.font()).horizontalAdvance(NAMES[key]) + 20)
             button.clicked.connect(lambda checked=False, k=key: self.navigate(k))
             tabs.addWidget(button)
             self.tabs[key] = button
@@ -145,10 +148,15 @@ class FarmWindow(QMainWindow):
         self.heartbeat.start(1000)
         self.navigate(farm.state["preferences"]["scene"], save=False)
         self.refresh()
-        self.resize(610, self.sizeHint().height())
+        self.setMinimumWidth(max(570, root.minimumSizeHint().width() + 4))
+        self.resize(max(610, self.minimumWidth()), self.sizeHint().height())
         screen = QApplication.primaryScreen()
         if screen:
             area = screen.availableGeometry()
+            if self.sizeHint().height() > area.height() - 64:
+                self.pages.hide()
+                self.manage.setText("Gerenciar fazenda")
+                self.adjustSize()
             self.resize(min(self.width(), area.width()), min(self.height(), area.height() - 24))
             self.move(
                 max(area.left(), area.right() - self.width() - 18),

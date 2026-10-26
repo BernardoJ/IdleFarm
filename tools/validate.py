@@ -38,6 +38,8 @@ def main():
         # Screenshots use a separate visual preview clock, not a gameplay speed flag.
         window = FarmWindow(farm)
         window.show()
+        if not window.pages.isVisible():
+            window.toggle_manage()
         app.processEvents()
         clipped = []
         scene_images = {}
