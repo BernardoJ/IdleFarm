@@ -1,0 +1,41 @@
+{
+  "crops_tested": [
+    "wheat",
+    "carrot",
+    "corn",
+    "strawberry",
+    "pumpkin"
+  ],
+  "buildings": [
+    "coop",
+    "barn",
+    "pigsty",
+    "stable",
+    "kennel"
+  ],
+  "animals": {
+    "chicken": 9,
+    "duck": 1,
+    "peacock": 1,
+    "cow": 1,
+    "goat": 1,
+    "sheep": 1,
+    "pig": 1,
+    "horse": 1,
+    "mutt": 1,
+    "beagle": 1,
+    "collie": 1,
+    "golden": 1
+  },
+  "plots": 12,
+  "coins": 8273,
+  "earned": 27383,
+  "virtual_hours": 92.0,
+  "ok": true,
+  "clipped_controls": [],
+  "scenes_captured": 12,
+  "device_pixel_ratio": 1.0,
+  "platform": "linux",
+  "timestamp": "2026-10-26T23:22:51.559300+00:00",
+  "application_tests": "Use python -m pytest for the complete suite."
+}

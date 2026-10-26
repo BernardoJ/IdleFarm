@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "initial_coins": 50,
+  "initial_plots": 2,
+  "offline_limit": 14400,
+  "expansion_base": 120,
+  "expansion_growth_percent": 35,
+  "animal_growth_percent": 12,
+  "recovery_coins": 5,
+  "crops": {
+    "wheat": {"name": "Trigo", "seconds": 3600, "seed": 5, "reward": 20, "unlock": 0},
+    "carrot": {"name": "Cenoura", "seconds": 7200, "seed": 10, "reward": 50, "unlock": 0},
+    "corn": {"name": "Milho", "seconds": 14400, "seed": 20, "reward": 125, "unlock": 200},
+    "strawberry": {"name": "Morango", "seconds": 21600, "seed": 30, "reward": 220, "unlock": 800},
+    "pumpkin": {"name": "Abóbora", "seconds": 28800, "seed": 50, "reward": 400, "unlock": 1600}
+  },
+  "buildings": {
+    "coop": {"name": "Galinheiro", "cost": 220, "description": "Ovos frescos, penas e companhia."},
+    "barn": {"name": "Celeiro", "cost": 1200, "description": "Leite e lã entre pastos e feno."},
+    "pigsty": {"name": "Chiqueiro", "cost": 700, "description": "Uma vida tranquila, com direito a lama."},
+    "stable": {"name": "Estábulo", "cost": 1800, "description": "Cavalos, campos abertos e bons negócios."},
+    "kennel": {"name": "Canil", "cost": 450, "description": "Amigos para toda a vida. Sem produção de moedas."}
+  },
+  "animals": {
+    "chicken": {"name": "Galinha", "building": "coop", "cost": 80, "reward": 15, "seconds": 1800},
+    "duck": {"name": "Pato", "building": "coop", "cost": 180, "reward": 30, "seconds": 2700},
+    "peacock": {"name": "Pavão", "building": "coop", "cost": 600, "reward": 110, "seconds": 7200},
+    "cow": {"name": "Vaca", "building": "barn", "cost": 650, "reward": 100, "seconds": 7200},
+    "goat": {"name": "Cabra", "building": "barn", "cost": 420, "reward": 52, "seconds": 3600},
+    "sheep": {"name": "Ovelha", "building": "barn", "cost": 500, "reward": 75, "seconds": 5400},
+    "pig": {"name": "Porco", "building": "pigsty", "cost": 450, "reward": 75, "seconds": 5400},
+    "horse": {"name": "Cavalo", "building": "stable", "cost": 1100, "reward": 170, "seconds": 7200},
+    "mutt": {"name": "Vira-lata", "building": "kennel", "cost": 100, "reward": 0, "seconds": 0},
+    "beagle": {"name": "Beagle", "building": "kennel", "cost": 180, "reward": 0, "seconds": 0},
+    "collie": {"name": "Border collie", "building": "kennel", "cost": 300, "reward": 0, "seconds": 0},
+    "golden": {"name": "Golden retriever", "building": "kennel", "cost": 420, "reward": 0, "seconds": 0}
+  }
+}
