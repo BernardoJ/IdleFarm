@@ -44,6 +44,7 @@ jobs:
         # Default Windows platform plugin: exercises qwindows.dll as a player would.
         run: python tools/smoke_exe.py dist/IdleFarm.exe --output qa-output/packaged
       - name: Upload executable and verification evidence
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: IdleFarm-Windows-x64

@@ -102,6 +102,9 @@ def main():
         window.close()
         app.processEvents()
     print(json.dumps(report, ensure_ascii=False, indent=2))
+    if os.getenv("GITHUB_ACTIONS") == "true":
+        for control in clipped:
+            print("::error title=IdleFarm layout::" + json.dumps(control, ensure_ascii=True))
     return 0 if report["ok"] else 1
 
 
