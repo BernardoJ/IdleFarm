@@ -105,3 +105,38 @@ def test_source_app_smoke_from_other_working_directory(tmp_path):
     assert result.returncode == 0, result.stderr
     data = json.loads(report.read_text(encoding="utf-8"))
     assert data["ok"] and not data["packaged"] and data["scenes"] == list(SCENES)
+
+
+def test_single_profile_lock_prevents_concurrent_accounting(app, tmp_path):
+    from PySide6.QtCore import QLockFile
+
+    root = Path(__file__).resolve().parents[1]
+    save = tmp_path / "save.json"
+    report = tmp_path / "locked.json"
+    lock = QLockFile(str(save) + ".lock")
+    assert lock.tryLock(0)
+    try:
+        run = subprocess.run(
+            [sys.executable, str(root / "main.py"), "--save", str(save), "--smoke", str(report)],
+            env=os.environ.copy(),
+            capture_output=True,
+            text=True,
+            timeout=45,
+        )
+        assert run.returncode == 1
+        assert not json.loads(report.read_text(encoding="utf-8"))["ok"]
+        assert not save.exists()
+    finally:
+        lock.unlock()
+
+
+def test_smoke_requires_isolated_profile(tmp_path):
+    root = Path(__file__).resolve().parents[1]
+    run = subprocess.run(
+        [sys.executable, str(root / "main.py"), "--smoke", str(tmp_path / "report.json")],
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+    assert run.returncode == 2
+    assert not (tmp_path / "report.json").exists()

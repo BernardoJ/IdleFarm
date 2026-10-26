@@ -44,10 +44,17 @@ def main():
                 raise AssertionError(f"Packaged app exit {run.returncode}: {run.stderr}")
             result = json.loads(report.read_text(encoding="utf-8"))
             assert result["ok"] and result["packaged"] and len(result["scenes"]) == 6, result
-            assert result["coins"] == 50 and save.exists(), result
+            expected_coins = 50 if iteration == 0 else 37
+            assert result["coins"] == expected_coins and save.exists(), result
             assert result["platform"] == sys.platform, result
             (out / f"smoke-{iteration + 1}.json").write_text(json.dumps(result, indent=2), encoding="utf-8")
-    digest = hashlib.file_digest(exe.open("rb"), "sha256").hexdigest()
+            if iteration == 0:
+                # A distinctive QA balance proves the second launch loads the save.
+                saved = json.loads(save.read_text(encoding="utf-8"))
+                saved["coins"] = 37
+                save.write_text(json.dumps(saved), encoding="utf-8")
+    with exe.open("rb") as stream:
+        digest = hashlib.file_digest(stream, "sha256").hexdigest()
     summary = {
         "ok": True,
         "platform": sys.platform,
@@ -56,6 +63,7 @@ def main():
         "sha256": digest,
         "launches": 2,
         "cwd_independent": True,
+        "save_restored": True,
         "scenes": 6,
     }
     (out / "executable.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")

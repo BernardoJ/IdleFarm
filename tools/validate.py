@@ -21,6 +21,7 @@ from game.engine import Farm
 from game.storage import SaveStore
 from tools.simulation import VirtualClock, full_playthrough
 from ui.window import FarmWindow
+from visual.scene import time_label
 
 
 def main():
@@ -47,6 +48,7 @@ def main():
             for hour, period in ((12, "day"), (23, "night")):
                 moment = datetime(2026, 1, 1, hour)
                 window.scene.qa_moment = moment
+                window.time_info.setText(time_label(hour) + moment.strftime(" · %H:%M"))
                 window.scene.repaint()
                 app.processEvents()
                 window.grab().save(str(output / f"{scene}-{period}.png"))

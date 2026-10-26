@@ -4,7 +4,7 @@
 
 Python 3.12.14, PySide6 6.10.0, Linux x64, plataforma Qt offscreen.
 
-- **57 testes passaram**, incluindo ações reais em controles Qt e inicialização
+- **59 testes passaram**, incluindo ações reais em controles Qt e inicialização
   da aplicação em outro diretório de trabalho.
 - A simulação partiu de **50 moedas e dois terrenos**, sem injetar dinheiro,
   percorreu **92 horas virtuais**, plantou e colheu todas as cinco culturas,

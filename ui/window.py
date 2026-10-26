@@ -404,8 +404,9 @@ class FarmWindow(QMainWindow):
                 else "Companhia · sem produção"
             )
             next_time = self.farm.next_production(key)
+            total = f" · total +{count * animal['reward']}/ciclo" if animal["reward"] else ""
             text.setText(
-                f"{animal['name']} · {count} adquirido(s)\n{detail}"
+                f"{animal['name']} · {count} adquirido(s){total}\n{detail}"
                 + (" · próxima em " + duration(next_time) if next_time is not None else "")
             )
             text.setToolTip(
