@@ -85,7 +85,9 @@ def main(argv=None):
                 try:
                     startup_scene = window.scene.scene
                     for scene in SCENES:
-                        window.navigate(scene)
+                        window.area_actions[scene].trigger()
+                        if window.scene.scene != scene or not window.area_actions[scene].isChecked():
+                            raise RuntimeError("Navegação inválida: " + scene)
                         for phase in (0, 9, 16, 29):
                             image = window.renderer.render(farm, scene, phase=phase)
                             if image.isNull() or (image.width(), image.height()) != (WIDTH, HEIGHT):
@@ -95,9 +97,21 @@ def main(argv=None):
                             if window.renderer.icon(key, frame).isNull():
                                 raise RuntimeError("Sprite inválido: " + key)
                     farm.save()
+                    from tools.smoke_scenarios import check_features
+
+                    feature_checks = check_features()
                     report = {
                         "ok": True,
                         "version": VERSION,
+                        "build_commit": (
+                            json.loads((ROOT / "config/build-info.json").read_text(encoding="utf-8"))[
+                                "commit"
+                            ]
+                            if (ROOT / "config/build-info.json").exists()
+                            else None
+                        ),
+                        "feature_checks": feature_checks,
+                        "save_status": farm.persistence.status.value,
                         "startup_scene": startup_scene,
                         "logical_resolution": [WIDTH, HEIGHT],
                         "animal_frames": 72,
