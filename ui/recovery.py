@@ -2,11 +2,9 @@
 
 import time
 
-from PySide6.QtCore import QEvent, Qt
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
-    QDialog,
     QHBoxLayout,
-    QLayout,
     QMessageBox,
     QPlainTextEdit,
     QPushButton,
@@ -16,24 +14,19 @@ from PySide6.QtWidgets import (
 from game.state import fresh
 from game.diagnostics import diagnostic_path
 from game.storage import RecoveryRequired
+from ui.dialog_layout import ReadableDialog
 from ui.window import STYLE, label
 
 
-class RecoveryDialog(QDialog):
+class RecoveryDialog(ReadableDialog):
     def __init__(self, store, recovery, *, clock=time.time, parent=None):
-        super().__init__(parent)
-        self._protecting_layout = False
+        super().__init__(parent, minimum_width=520)
         self.store, self.recovery, self.clock = store, recovery, clock
         self.extra_details = []
         self.setWindowTitle("IdleFarm · recuperar sua fazenda")
-        self.setMinimumWidth(520)
         self.setStyleSheet(STYLE)
         box = QVBoxLayout(self)
-        box.setSizeConstraint(QLayout.SetMinimumSize)
         box.setContentsMargins(18, 16, 18, 16)
-        # Preserve the dialog's original minimum width when the layout derives
-        # its minimum size; this zero-height strut adds no vertical space.
-        box.addStrut(520 - 36)
         box.setSpacing(12)
         self.title = label("RECUPERAR PROGRESSO")
         self.title.setObjectName("title")
@@ -86,6 +79,7 @@ class RecoveryDialog(QDialog):
         self.details.setTextInteractionFlags(Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard)
         self.details.hide()
         box.addWidget(self.details)
+        self.protect_wrapped_labels(box, self.title, self.message, self.backup_info, self.status)
         self.update_recovery(recovery)
 
     def update_recovery(self, recovery):
@@ -99,37 +93,6 @@ class RecoveryDialog(QDialog):
         )
         self.update_details()
         self._protect_wrapped_labels()
-
-    def _protect_wrapped_labels(self):
-        """Keep player-facing text intact when adjustSize meets a small screen."""
-        if getattr(self, "_protecting_layout", False) or self.layout() is None:
-            return
-        self._protecting_layout = True
-        try:
-            self.layout().activate()
-            changed = False
-            for name in ("title", "message", "backup_info", "status"):
-                item = getattr(self, name, None)
-                if item is None or item.isHidden():
-                    continue
-                required = item.heightForWidth(max(1, item.width()))
-                if required >= 0 and item.minimumHeight() != required:
-                    item.setMinimumHeight(required)
-                    changed = True
-            if changed:
-                self.layout().activate()
-        finally:
-            self._protecting_layout = False
-
-    def resizeEvent(self, event):
-        super().resizeEvent(event)
-        self._protect_wrapped_labels()
-
-    def event(self, event):
-        result = super().event(event)
-        if event.type() == QEvent.LayoutRequest:
-            self._protect_wrapped_labels()
-        return result
 
     def update_details(self):
         files = "\n".join(str(path.resolve()) for path in self.recovery.existing_paths)
@@ -169,6 +132,7 @@ class RecoveryDialog(QDialog):
             self.update_recovery(recovery)
             self.status.setText("O progresso ainda não pôde ser aberto. Nenhum arquivo foi substituído.")
             self.status.show()
+            self._protect_wrapped_labels()
             return
         except (OSError, ValueError) as exc:
             self.show_failure(exc)
@@ -182,6 +146,7 @@ class RecoveryDialog(QDialog):
                 "Para começar outra partida, escolha Iniciar nova fazenda."
             )
             self.status.show()
+            self._protect_wrapped_labels()
             return
         self.accept()
 

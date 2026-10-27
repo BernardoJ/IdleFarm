@@ -2,7 +2,6 @@
 
 from PySide6.QtWidgets import (
     QComboBox,
-    QDialog,
     QHBoxLayout,
     QLabel,
     QPushButton,
@@ -11,20 +10,20 @@ from PySide6.QtWidgets import (
 )
 
 from config.data import CROPS
+from ui.dialog_layout import ReadableDialog
 
 
 def money(value):
     return f"{value:,}".replace(",", ".")
 
 
-class ReplantDialog(QDialog):
+class ReplantDialog(ReadableDialog):
     def __init__(self, farm, crop="wheat", parent=None):
-        super().__init__(parent)
+        super().__init__(parent, minimum_width=420)
         self.farm = farm
         self.selection = None
         self._reviewed_quote = None
         self.setWindowTitle("Plantar terrenos livres")
-        self.setMinimumWidth(420)
         box = QVBoxLayout(self)
         heading = QLabel("Escolha a cultura e confira a quantidade e o custo antes de confirmar.")
         heading.setWordWrap(True)
@@ -64,6 +63,7 @@ class ReplantDialog(QDialog):
         self.confirm.clicked.connect(self.accept)
         buttons.addWidget(self.confirm)
         box.addLayout(buttons)
+        self.protect_wrapped_labels(box, heading, self.summary, self.feedback)
         self.crop.currentIndexChanged.connect(lambda: self.refresh_quote(reset_quantity=True))
         self.quantity.valueChanged.connect(self.refresh_quote)
         self.refresh_quote(reset_quantity=True)
@@ -88,6 +88,7 @@ class ReplantDialog(QDialog):
             self.summary.setText("Não há culturas desbloqueadas para plantar.")
             self.confirm.setEnabled(False)
             self._reviewed_quote = None
+            self._protect_wrapped_labels()
             return
         available = self.farm.planting_quote(key)
         limit = available["affordable_count"]
@@ -113,6 +114,7 @@ class ReplantDialog(QDialog):
             lines.append(f"Saldo após o plantio: {money(quote['balance'] - quote['cost'])} moedas.")
         self.summary.setText("\n".join(lines))
         self.confirm.setEnabled(quote["count"] > 0 and quote["cost"] <= quote["balance"])
+        self._protect_wrapped_labels()
 
     def accept(self):
         key = self.crop.currentData()
@@ -128,6 +130,7 @@ class ReplantDialog(QDialog):
             self.feedback.setText(
                 "Seu saldo ou os terrenos disponíveis mudaram. Confira os valores e confirme novamente."
             )
+            self._protect_wrapped_labels()
             return
         self.selection = key, tuple(quote["plots"])
         super().accept()

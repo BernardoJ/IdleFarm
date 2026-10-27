@@ -1,6 +1,12 @@
 """A batch proposal must be explicit, affordable and refreshed before acceptance."""
 
 from copy import deepcopy
+import os
+from pathlib import Path
+import subprocess
+import sys
+
+import pytest
 
 from PySide6.QtCore import Qt
 from PySide6.QtTest import QTest
@@ -163,3 +169,66 @@ def test_dialog_only_lists_unlocked_crops(app, farm):
         assert dialog.crop.currentData() == "wheat"
     finally:
         dialog.close()
+
+
+@pytest.mark.parametrize("scale", ["1.25", "2"])
+def test_wrapped_proposal_and_feedback_remain_readable_at_minimum_width(scale):
+    # Qt reads its DPI setting when QApplication is constructed. Separate
+    # processes exercise actual layout metrics, not a monkeypatched geometry.
+    script = """
+from PySide6.QtWidgets import QApplication, QLabel
+from game.engine import Farm
+from ui.plot_tools import ReplantDialog
+from ui.window import STYLE
+
+app = QApplication([])
+farm = Farm(clock=lambda: 1_800_000_000)
+farm.state["coins"] = 10**24
+farm.state["plots"] = [None] * 2000
+dialog = ReplantDialog(farm)
+dialog.setStyleSheet(STYLE)
+dialog.show()
+
+def check_labels():
+    assert dialog.width() >= 420
+    labels = [item for item in dialog.findChildren(QLabel)
+              if item.isVisible() and item.wordWrap() and item.text()]
+    assert labels
+    for item in labels:
+        required = item.heightForWidth(item.width())
+        assert item.height() >= required, (item.objectName(), item.text(), item.width(), item.height(), required)
+
+for width, height in ((420, 220), (650, 280), (420, 220)):
+    dialog.resize(width, height)
+    app.processEvents()
+    dialog.adjustSize()
+    app.processEvents()
+    check_labels()
+
+# A changed quote adds feedback after the original layout was already shown.
+farm.state["coins"] -= 1
+dialog.accept()
+assert dialog.selection is None and dialog.feedback.text()
+dialog.resize(420, 220)
+app.processEvents()
+dialog.adjustSize()
+app.processEvents()
+check_labels()
+dialog.crop.setCurrentIndex(dialog.crop.findData("carrot"))
+app.processEvents()
+assert not dialog.feedback.text() and dialog.feedback.minimumHeight() == 0
+check_labels()
+dialog.close()
+"""
+    environment = os.environ.copy()
+    environment["QT_QPA_PLATFORM"] = "offscreen"
+    environment["QT_SCALE_FACTOR"] = scale
+    result = subprocess.run(
+        [sys.executable, "-c", script],
+        cwd=Path(__file__).resolve().parents[1],
+        env=environment,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
