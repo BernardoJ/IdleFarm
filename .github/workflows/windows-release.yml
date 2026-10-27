@@ -16,6 +16,7 @@ jobs:
     timeout-minutes: 25
     env:
       IDLEFARM_BUILD_COMMIT: ${{ github.sha }}
+      PYTHONUTF8: '1'
     permissions:
       contents: write
     steps:
@@ -75,4 +76,4 @@ jobs:
         shell: pwsh
         run: |
           $tag = '${{ github.ref_name }}'
-          gh release create $tag dist/IdleFarm.exe dist/SHA256SUMS.txt qa-output/packaged/executable.json qa-output/performance.json --verify-tag --latest --title "IdleFarm $tag" --notes-file docs/RELEASE_NOTES.md
+          gh release create $tag dist/IdleFarm.exe dist/SHA256SUMS.txt qa-output/packaged/executable.json qa-output/performance.json qa-output/experience-1/management-filter.png qa-output/experience-1.25/batch-confirmation.png qa-output/experience-2/recovery-details.png --verify-tag --latest --title "IdleFarm $tag" --notes-file docs/RELEASE_NOTES.md

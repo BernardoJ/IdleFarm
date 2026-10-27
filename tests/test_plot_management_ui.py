@@ -38,6 +38,9 @@ def dialog_result(monkeypatch, result, selection):
         def exec(self):
             return result
 
+        def deleteLater(self):
+            pass
+
     monkeypatch.setattr("ui.plot_tools.ReplantDialog", Proposal)
 
 

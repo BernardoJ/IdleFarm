@@ -446,9 +446,14 @@ class FarmWindow(QMainWindow):
             self.notify("Nenhum terreno livre para plantar em lote.")
             return
         dialog = ReplantDialog(self.farm, self.crops.currentData(), parent=self)
-        if dialog.exec() != QDialog.Accepted or dialog.selection is None:
+        try:
+            accepted = dialog.exec() == QDialog.Accepted
+            selection = dialog.selection
+        finally:
+            dialog.deleteLater()
+        if not accepted or selection is None:
             return
-        crop, plots = dialog.selection
+        crop, plots = selection
         result = self.act(lambda: self.farm.plant_batch(crop, plots), "Plantio em lote realizado.")
         if result is not None:
             text = f"{result['count']} terreno(s) com {CROPS[crop]['name']} · custo {money(result['cost'])} moedas."
