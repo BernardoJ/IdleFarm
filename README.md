@@ -17,7 +17,7 @@ O jogo funciona sem internet.
 **[Baixar IdleFarm.exe · Windows 64 bits](https://github.com/BernardoJ/IdleFarm/releases/download/v0.3.1/IdleFarm.exe)** · [Release e checksums](https://github.com/BernardoJ/IdleFarm/releases/tag/v0.3.1)
 
 O workflow [Windows x64](.github/workflows/windows-release.yml) gera
-`IdleFarm.exe` e, para tags de versão, publica o arquivo e `SHA256SUMS.txt` na
+`IdleFarm.exe` e, para tags de versão, publica uma prévia com o arquivo e `SHA256SUMS.txt` na
 aba [Releases](https://github.com/BernardoJ/IdleFarm/releases).
 Uma release só é criada após testes, build e três inicializações do próprio
 executável no Windows, incluindo a recusa segura de um save inválido. Confira
@@ -138,8 +138,10 @@ python tools/smoke_exe.py dist/IdleFarm.exe --output qa-output/packaged
 
 O PyInstaller gera binários nativos: em Linux, a saída é Linux. O executável
 Windows x64 deve ser gerado no Windows ou pelo workflow Windows incluído.
-Para publicar uma versão, envie uma tag, por exemplo `v0.3.1`; a publicação é
-automática somente se todos os passos do workflow passarem.
+Para publicar uma prévia, envie uma tag, por exemplo `v0.3.1`; a publicação é
+automática somente se todos os passos do workflow passarem. Inspecione as
+capturas publicadas, incluindo `packaged-window.png`, antes de promover a versão
+com `gh release edit v0.3.1 --prerelease=false --latest`.
 
 ## Arquitetura e persistência
 

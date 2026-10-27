@@ -253,8 +253,10 @@ O binário verifica os glifos das fontes e produz `packaged-window.png` a partir
 da própria janela, para permitir inspeção direta da distribuição congelada.
 Esses cenários não alteram perfis de jogadores nem expõem atalhos de progressão.
 O workflow executa os testes, as capturas nas quatro escalas de DPI, o benchmark
-e a verificação do binário antes de publicar uma tag. O executável é novo e
-incorpora os recursos locais; não requer Python instalado.
+e a verificação do binário antes de publicar uma prévia da tag. As capturas,
+inclusive a produzida pelo EXE, precisam ser inspecionadas antes da promoção
+para versão principal. O executável é novo e incorpora os recursos locais;
+não requer Python instalado.
 
 ## Procedimento manual complementar
 
