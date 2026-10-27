@@ -182,7 +182,7 @@ caso de falha de disco.
 
 ## Testes e verificação
 
-A suíte final local passou com **256 testes**, sem falhas, erros ou testes ignorados.
+A suíte final local passou com **258 testes**, sem falhas, erros ou testes ignorados.
 O resumo está em `screenshots/experience/tests-linux.json`; as seis capturas
 dos novos fluxos também foram verificadas em DPI 100%, 125%, 150% e 200%.
 
@@ -191,6 +191,11 @@ passou com **142 testes** antes de iniciar as melhorias de experiência. Os
 resultados finais da suíte e do executável devem ser consultados no relatório
 da versão e na execução do GitHub Actions; este documento não declara uma
 compilação Windows aprovada sem essas evidências.
+
+A validação visual encontrou dois cortes de texto: detalhes de recuperação em
+DPI 200% e resumo do plantio em lote em DPI 125% com fonte nativa do Windows.
+Os dois foram corrigidos pelo dimensionamento compartilhado de diálogos, com
+regressões específicas; o validador permaneceu com os mesmos critérios.
 
 Os testes novos separam os comportamentos em:
 
