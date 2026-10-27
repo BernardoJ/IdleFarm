@@ -1,6 +1,7 @@
 """Observable save generations; delayed completions cannot acknowledge newer data."""
 
 from enum import Enum
+import logging
 from weakref import WeakMethod
 
 
@@ -57,4 +58,5 @@ class SaveProgress:
     def fail(self, error):
         self.last_error = str(error)
         self.saving = False
+        logging.getLogger(__name__).warning("Falha de gravação; alterações ainda não salvas: %s", error)
         self._notify()

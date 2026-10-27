@@ -6,6 +6,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QDialog, QHBoxLayout, QMessageBox, QPlainTextEdit, QPushButton, QVBoxLayout
 
 from game.state import fresh
+from game.diagnostics import diagnostic_path
 from game.storage import RecoveryRequired
 from ui.window import STYLE, label
 
@@ -88,6 +89,9 @@ class RecoveryDialog(QDialog):
     def update_details(self):
         files = "\n".join(str(path.resolve()) for path in self.recovery.existing_paths)
         text = self.recovery.details + "\n\nArquivos existentes preservados:\n" + files
+        log_path = diagnostic_path(self.store.path)
+        if log_path.exists():
+            text += "\n\nLog de diagnóstico:\n" + str(log_path.resolve())
         if self.extra_details:
             text += "\n\nÚltimas tentativas:\n" + "\n".join(self.extra_details)
         self.details.setPlainText(text)

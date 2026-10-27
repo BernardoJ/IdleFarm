@@ -214,7 +214,9 @@ def test_main_cancel_releases_profile_lock_and_preserves_bytes(app, tmp_path, cl
     before = snapshot(tmp_path)
     monkeypatch.setattr(RecoveryDialog, "exec", lambda self: QDialog.Rejected)
     assert main(["--save", str(store.path)]) == 0
-    assert snapshot(tmp_path) == before
+    after = snapshot(tmp_path)
+    assert {name: after[name] for name in before} == before
+    assert set(after) - set(before) <= {store.path.name + ".diagnostic.log"}
     lock = QLockFile(str(store.path) + ".lock")
     try:
         assert lock.tryLock(0)

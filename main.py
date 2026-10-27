@@ -57,6 +57,7 @@ def main(argv=None):
     from config.version import VERSION
     from visual.scene import WIDTH, HEIGHT
     from game.storage import RecoveryRequired, SaveStore
+    from game.diagnostics import attach_log, detach_log
     from ui.window import FarmWindow
 
     app = QApplication.instance() or QApplication(sys.argv[:1])
@@ -65,12 +66,14 @@ def main(argv=None):
     app.setOrganizationName("IdleFarm")
     store = SaveStore(args.save)
     lock = None
+    diagnostics = None
     try:
         store.path.parent.mkdir(parents=True, exist_ok=True)
         lock = QLockFile(str(store.path) + ".lock")
         lock.setStaleLockTime(0)
         if not lock.tryLock(0):
             raise RuntimeError("Este perfil do IdleFarm já está aberto em outra janela.")
+        diagnostics = attach_log(store.path)
         farm = load_startup_farm(store, interactive=not bool(args.smoke))
         if farm is None:
             return 0
@@ -145,6 +148,7 @@ def main(argv=None):
             QMessageBox.critical(None, "IdleFarm · não foi possível iniciar", str(exc))
         return 1
     finally:
+        detach_log(diagnostics)
         if lock is not None and lock.isLocked():
             lock.unlock()
 
