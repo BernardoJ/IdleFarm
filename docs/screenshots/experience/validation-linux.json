@@ -1,0 +1,80 @@
+{
+  "version": "0.3.0",
+  "checks": {
+    "selected_empty_plot_outside_filter_retained": true,
+    "selected_plot_visible": true,
+    "representative_cap": true,
+    "ready_and_growing_present": true,
+    "affordable_proposal_requires_confirmation": true,
+    "save_failure_remains_explicit": true,
+    "save_retry_recovers": true,
+    "one_minute_tutorial_visible": true,
+    "recovery_does_not_replace_progress": true
+  },
+  "management": {
+    "owned_plots": 12,
+    "ready_plot_ids": [
+      0,
+      2
+    ],
+    "growing_plot_ids": [
+      1,
+      3
+    ],
+    "selected_plot_id": 11,
+    "scene_selected_plot_id": 11,
+    "filtered_plot_ids": [
+      0,
+      2,
+      11
+    ],
+    "rendered_plot_ids": [
+      0,
+      2,
+      11,
+      1,
+      3
+    ]
+  },
+  "batch_proposal": {
+    "crop": "carrot",
+    "count": 8,
+    "cost": 80,
+    "balance": 5371,
+    "free_plot_count": 8
+  },
+  "save_failure": {
+    "status": "error",
+    "dirty": true,
+    "indicator_text": "Erro ao salvar · alterações não salvas",
+    "retry_visible": true,
+    "applied_plant_plot_id": 11
+  },
+  "tutorial": {
+    "phase": "growing",
+    "plot_id": 0,
+    "duration_seconds": 60,
+    "remaining_seconds": 45.0,
+    "displayed_text": "Tutorial · terreno 01: acompanhe o crescimento; ao ficar pronto, clique em Colher."
+  },
+  "recovery": {
+    "backup_available": true,
+    "details_read_only": true,
+    "primary_player_message": "Não foi possível abrir o seu progresso salvo. Seus arquivos foram preservados. Você pode tentar novamente, recuperar uma cópia de segurança ou escolher uma nova fazenda."
+  },
+  "ok": true,
+  "clipped_controls": [],
+  "captures": [
+    "management-filter.png",
+    "batch-confirmation.png",
+    "save-error.png",
+    "tutorial.png",
+    "recovery.png",
+    "recovery-details.png"
+  ],
+  "capture_count": 6,
+  "device_pixel_ratio": 1.0,
+  "platform": "linux",
+  "timestamp": "2026-10-27T19:46:49.946129+00:00",
+  "profiles": "temporary and isolated; no real saves read or written"
+}

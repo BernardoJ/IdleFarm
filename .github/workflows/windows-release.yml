@@ -14,6 +14,8 @@ jobs:
   windows:
     runs-on: windows-latest
     timeout-minutes: 25
+    env:
+      IDLEFARM_BUILD_COMMIT: ${{ github.sha }}
     permissions:
       contents: write
     steps:
@@ -34,7 +36,7 @@ jobs:
         env:
           QT_QPA_PLATFORM: offscreen
         run: python -m pytest -q --junitxml=qa-output/tests.xml
-      - name: Capture six environments during day and night
+      - name: Capture environments and experience dialogs at four DPI scales
         env:
           QT_QPA_PLATFORM: offscreen
         shell: pwsh
@@ -42,6 +44,8 @@ jobs:
           foreach ($scale in @('1', '1.25', '1.5', '2')) {
             $env:QT_SCALE_FACTOR = $scale
             python tools/validate.py --output "qa-output/visual-$scale"
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            python tools/validate_experience.py --output "qa-output/experience-$scale"
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
           Remove-Item Env:QT_SCALE_FACTOR
@@ -71,4 +75,4 @@ jobs:
         shell: pwsh
         run: |
           $tag = '${{ github.ref_name }}'
-          gh release create $tag dist/IdleFarm.exe dist/SHA256SUMS.txt qa-output/packaged/executable.json qa-output/performance.json --verify-tag --latest --title "IdleFarm $tag · uma nova fazenda" --notes-file docs/RELEASE_NOTES.md
+          gh release create $tag dist/IdleFarm.exe dist/SHA256SUMS.txt qa-output/packaged/executable.json qa-output/performance.json --verify-tag --latest --title "IdleFarm $tag" --notes-file docs/RELEASE_NOTES.md

@@ -182,6 +182,10 @@ caso de falha de disco.
 
 ## Testes e verificação
 
+A suíte final local passou com **256 testes**, sem falhas, erros ou testes ignorados.
+O resumo está em `screenshots/experience/tests-linux.json`; as seis capturas
+dos novos fluxos também foram verificadas em DPI 100%, 125%, 150% e 200%.
+
 A linha de base executada na `main` anterior passou com **76 testes**. A Fase 1
 passou com **142 testes** antes de iniciar as melhorias de experiência. Os
 resultados finais da suíte e do executável devem ser consultados no relatório
@@ -203,7 +207,7 @@ Os testes novos separam os comportamentos em:
 | `test_recovery_ui.py` | Fluxos de abertura, retry, confirmação, cancelamento e ausência de sobrescrita silenciosa. |
 | `test_time_policy.py` | Equivalência entre retomada/reabertura em 30 min, 2 h, 4 h e 8 h, ciclos parciais e alterações do relógio. |
 | `test_diagnostics.py` | Logs separados, impossibilidade de escrita e encerramento de handlers. |
-| `test_integrity_end_to_end.py` | Combinação de tutorial, lotes, falha de gravação, retomada e reabertura. |
+| `test_integrity_end_to_end.py` | Compra/produção e restauração/offline com falhas de gravação e reabertura. |
 
 Execute a partir da raiz do repositório, usando perfis temporários:
 
@@ -213,6 +217,7 @@ python -m ruff check .
 python -m ruff format --check .
 python -m pytest -q --junitxml=qa-output/tests.xml
 python tools/validate.py --output qa-output/visual
+python tools/validate_experience.py --output qa-output/experience
 python tools/benchmark.py --output qa-output/performance.json
 ```
 

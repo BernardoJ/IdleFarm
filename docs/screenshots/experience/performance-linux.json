@@ -1,0 +1,23 @@
+{
+  "ok": true,
+  "frames": 1200,
+  "simulated_visual_hours": 24,
+  "render_mean_ms": 0.652,
+  "render_p95_ms": 1.107,
+  "resident_before_bytes": 80429056,
+  "resident_after_bytes": 81219584,
+  "resident_growth_bytes": 790528,
+  "cached_light_plates": 24,
+  "cached_animal_frames": 72,
+  "economy_unchanged": true,
+  "representatives": {
+    "fields": 5,
+    "coop": 5,
+    "barn": 3,
+    "pigsty": 1,
+    "stable": 1,
+    "kennel": 4
+  },
+  "platform": "linux",
+  "scope": "1200 sampled renders across one visual day; not 24 wall-clock hours"
+}

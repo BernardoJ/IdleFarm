@@ -18,6 +18,8 @@ if errorlevel 1 exit /b 1
 if errorlevel 1 exit /b 1
 .venv\Scripts\python.exe tools\validate.py --output qa-output\visual
 if errorlevel 1 exit /b 1
+.venv\Scripts\python.exe tools\validate_experience.py --output qa-output\experience
+if errorlevel 1 exit /b 1
 .venv\Scripts\python.exe tools\benchmark.py --output qa-output\performance.json
 if errorlevel 1 exit /b 1
 .venv\Scripts\python.exe -m PyInstaller --noconfirm --clean IdleFarm.spec

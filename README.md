@@ -88,6 +88,8 @@ partida exige confirmação; os arquivos anteriores são preservados. Cancelar
 mantém os arquivos e encerra a abertura, sem criar outra fazenda silenciosamente.
 Uma instalação sem qualquer progresso anterior inicia normalmente.
 
+[Capturas reais do tutorial, filtro, confirmação de lote e recuperação](docs/screenshots/experience/).
+
 ## Executar pelo código
 
 ```powershell
@@ -109,6 +111,7 @@ python -m ruff check .
 python -m ruff format --check .
 python -m pytest -q
 python tools/validate.py --output qa-output/visual
+python tools/validate_experience.py --output qa-output/experience
 python tools/benchmark.py --output qa-output/performance.json
 ```
 
