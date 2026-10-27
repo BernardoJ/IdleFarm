@@ -1,18 +1,44 @@
-## Uma nova fazenda
+## IdleFarm 0.3.0 · cuidar da fazenda com mais segurança
 
-Reformulação gráfica completa: seis cenários originais em **512×288**, cinco
-interiores detalhados, 72 quadros de animais e vinte estágios das culturas.
-Galinheiro com ninhos e poleiros, celeiro com feno, chiqueiro com lama,
-estábulo com baias e selas, canil com camas e brinquedos, e um campo cultivável
-com vegetação, caminhos e ferramentas.
+Esta versão corrige o indicador de salvamento, o tratamento de arquivos
+inválidos e a seleção dos canteiros. Acrescenta ferramentas para fazendas
+maiores e preserva a arte, os cenários e as animações da v0.2.0.
 
-Luz das janelas, lanternas à noite, sombras, primeiro plano, passeios curtos e
-animações de repouso, alimentação e descanso. A interface acompanha a nova
-arte, com molduras rurais e ícones. O jogo sempre abre nas **Plantações**;
-o menu **Áreas da fazenda** mostra uma área por vez.
+### Progresso protegido e recuperação compreensível
 
-**A economia e os saves da v0.1.0 foram preservados.** Os animais continuam
-produzindo nas outras áreas e o limite visual de cinco não limita a fazenda.
+O indicador mostra **Tudo salvo**, **Salvando…**, **Alterações não salvas** ou
+**Erro ao salvar** de acordo com a gravação real. Uma falha continua visível
+até ser resolvida. **Tentar salvar** persiste a ação já aplicada na janela,
+sem repetir uma compra ou cobrar novamente.
+
+Saves inválidos, inclusive com timestamps extremos, são rejeitados de forma
+controlada. A tela de recuperação permite tentar novamente, consultar detalhes,
+restaurar um backup válido ou confirmar uma nova fazenda. Os arquivos anteriores
+são preservados; nenhuma nova partida substitui silenciosamente seu progresso.
+
+### Menos tarefas repetitivas
+
+- **Prontas** filtra as colheitas disponíveis, mantendo o terreno selecionado
+  identificado mesmo quando não atender ao filtro.
+- **Próximo livre** encontra o próximo terreno disponível em ordem previsível.
+- **Colher prontas** reúne as colheitas maduras em uma operação e informa o total.
+- **Plantar terrenos livres** mostra cultura, quantidade, custo e saldo antes da
+  confirmação. É possível plantar só a quantidade que o saldo permite. Propostas
+  alteradas precisam ser revisadas novamente.
+- O terreno selecionado aparece destacado no cenário. Cliques sobre canteiros
+  sobrepostos priorizam aquele que está visualmente à frente.
+
+### Um primeiro ciclo mais acessível
+
+Em uma fazenda nova, somente o **primeiro trigo** cresce em **60 segundos**.
+Seu custo e sua recompensa são normais. Após a colheita, o trigo volta ao tempo
+usual de uma hora. O benefício é salvo e não recomeça quando você abre o jogo.
+**Saves antigos mantêm suas plantações e seus tempos de crescimento.**
+
+Suspensão, hibernação e reabertura agora seguem a mesma regra: até **quatro
+horas** de produção animal por ausência. O crescimento das culturas considera
+todo o tempo real. Sessões ativas com atualizações regulares continuam
+acumulando produção normalmente.
 
 ### Jogar no Windows 64 bits
 
@@ -20,13 +46,16 @@ Baixe **IdleFarm.exe** abaixo e abra com dois cliques. Não requer instalação
 de Python nem conexão à internet. O progresso continua em
 `%APPDATA%\IdleFarm\save.json`. O executável não possui assinatura digital.
 
-### Verificação
+### Verificação da distribuição
 
-Esta Release é publicada somente depois de testes funcionais e de interface,
-capturas em DPI 100%, 125%, 150% e 200%, benchmark do renderizador, build no
-Windows e duas inicializações do próprio executável com um perfil isolado.
-`SHA256SUMS.txt` contém o checksum; `executable.json` registra o teste do binário
-e `performance.json` registra as medições do executor Windows. As capturas e o
-relatório completo dos testes ficam no artefato da execução do GitHub Actions.
+A publicação desta Release depende da aprovação dos testes funcionais e de
+interface, das capturas em DPI 100%, 125%, 150% e 200%, do benchmark, do build
+Windows limpo e do teste do próprio executável com perfis isolados. O binário
+verifica tutorial, lotes, retomada, recuperação e repetição segura de salvamento,
+além de registrar seu commit de origem.
+`SHA256SUMS.txt` contém o checksum; `executable.json` e `performance.json`
+registram as verificações do binário e do renderizador. Os demais relatórios e
+capturas ficam no artefato da execução do GitHub Actions.
 
-[Capturas dos seis ambientes](https://github.com/BernardoJ/IdleFarm#ambientes)
+[Regras de estabilidade e recuperação](https://github.com/BernardoJ/IdleFarm/blob/main/docs/ESTABILIDADE.md)
+· [Changelog](https://github.com/BernardoJ/IdleFarm/blob/main/CHANGELOG.md)
