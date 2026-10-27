@@ -15,6 +15,7 @@ from game.storage import RecoveryRequired, SaveStore
 from tools.simulation import VirtualClock, earn_to
 from ui.plot_tools import ReplantDialog
 from ui.recovery import RecoveryDialog
+from tools.font_checks import check_readable_fonts
 
 
 def require(condition, message):
@@ -39,6 +40,8 @@ def check_features():
         farm.harvest_ready()
         before = farm.state["coins"]
         proposal = ReplantDialog(farm, "wheat")
+        proposal.show()
+        batch_fonts = check_readable_fonts(proposal, raise_on_error=True)
         require(
             proposal.quantity.value() == 2 and proposal.confirm.isEnabled(), "confirmação em lote ausente"
         )
@@ -101,6 +104,9 @@ def check_features():
         except RecoveryRequired as error:
             require(error.backup_data is not None, "backup válido não encontrado")
             recovery_dialog = RecoveryDialog(recover, error, clock=clock)
+            recovery_dialog.show()
+            recovery_dialog.toggle_details()
+            recovery_fonts = check_readable_fonts(recovery_dialog, raise_on_error=True)
             require(recovery_dialog.restore_button.isEnabled(), "restauração válida indisponível")
             recovery_dialog.reject()
         else:
@@ -136,4 +142,5 @@ def check_features():
             "recovery_preserves_files": True,
             "resume_matches_reopen": True,
             "legacy_save_compatible": True,
+            "font_checks": {"batch": batch_fonts, "recovery": recovery_fonts},
         }

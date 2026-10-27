@@ -1,6 +1,14 @@
 # Changelog
 
-## 0.3.0 — 27/10/2026
+## 0.3.1 — 27/10/2026
+
+- Capturas Windows passam a usar o renderizador nativo e sua base de fontes,
+  corrigindo a evidência visual com texto em quadrados produzida pelo modo offscreen.
+- Validação de glifos e desenho de letras nas capturas e no próprio executável,
+  além das verificações de dimensões, para bloquear uma distribuição ilegível.
+- A v0.3.0 permanece como prévia; esta versão incorpora suas correções e melhorias.
+
+## 0.3.0 — 27/10/2026 (prévia)
 
 - Indicador de salvamento baseado em gerações confirmadas, com estados de
   gravação, pendência e erro; notificações expiradas não declaram sucesso falso.

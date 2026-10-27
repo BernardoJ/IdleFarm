@@ -35,11 +35,12 @@ jobs:
           python -m ruff format --check .
       - name: Simulate full gameplay and test GUI
         env:
-          QT_QPA_PLATFORM: offscreen
+          QT_QPA_PLATFORM: windows
         run: python -m pytest -q --junitxml=qa-output/tests.xml
       - name: Capture environments and experience dialogs at four DPI scales
         env:
-          QT_QPA_PLATFORM: offscreen
+          # Use the player's native font database; offscreen can render only tofu on Windows.
+          QT_QPA_PLATFORM: windows
         shell: pwsh
         run: |
           foreach ($scale in @('1', '1.25', '1.5', '2')) {
@@ -76,4 +77,4 @@ jobs:
         shell: pwsh
         run: |
           $tag = '${{ github.ref_name }}'
-          gh release create $tag dist/IdleFarm.exe dist/SHA256SUMS.txt qa-output/packaged/executable.json qa-output/performance.json qa-output/experience-1/management-filter.png qa-output/experience-1.25/batch-confirmation.png qa-output/experience-2/recovery-details.png --verify-tag --latest --title "IdleFarm $tag" --notes-file docs/RELEASE_NOTES.md
+          gh release create $tag dist/IdleFarm.exe dist/SHA256SUMS.txt qa-output/packaged/executable.json qa-output/packaged/packaged-window.png qa-output/performance.json qa-output/experience-1/management-filter.png qa-output/experience-1.25/batch-confirmation.png qa-output/experience-2/recovery-details.png --verify-tag --latest --title "IdleFarm $tag" --notes-file docs/RELEASE_NOTES.md

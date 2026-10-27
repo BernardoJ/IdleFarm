@@ -1,4 +1,4 @@
-# IdleFarm 0.3.0 — estabilidade, recuperação e experiência
+# IdleFarm 0.3.1 — estabilidade, recuperação e experiência
 
 A versão mantém a arquitetura Python/PySide6 e a identidade visual 512×288 da
 v0.2.0. A implementação foi dividida em correções críticas, melhorias de
@@ -182,7 +182,7 @@ caso de falha de disco.
 
 ## Testes e verificação
 
-A suíte final local passou com **258 testes**, sem falhas, erros ou testes ignorados.
+A suíte final local passou com **264 testes**, sem falhas, erros ou testes ignorados.
 O resumo está em `screenshots/experience/tests-linux.json`; as seis capturas
 dos novos fluxos também foram verificadas em DPI 100%, 125%, 150% e 200%.
 
@@ -196,6 +196,13 @@ A validação visual encontrou dois cortes de texto: detalhes de recuperação e
 DPI 200% e resumo do plantio em lote em DPI 125% com fonte nativa do Windows.
 Os dois foram corrigidos pelo dimensionamento compartilhado de diálogos, com
 regressões específicas; o validador permaneceu com os mesmos critérios.
+
+A inspeção posterior das capturas da v0.3.0 revelou texto em quadrados no
+plugin offscreen do Windows, uma falha que as métricas geométricas não detectam.
+Essa versão ficou como prévia. Na v0.3.1, as capturas Windows usam o plugin nativo
+`windows`, e tanto os validadores quanto o smoke test do executável verificam
+fontes válidas, cobertura de caracteres e desenho distinto de letras. A
+aprovação exige fontes legíveis além de controles sem cortes.
 
 Os testes novos separam os comportamentos em:
 
@@ -213,6 +220,7 @@ Os testes novos separam os comportamentos em:
 | `test_time_policy.py` | Equivalência entre retomada/reabertura em 30 min, 2 h, 4 h e 8 h, ciclos parciais e alterações do relógio. |
 | `test_diagnostics.py` | Logs separados, impossibilidade de escrita e encerramento de handlers. |
 | `test_integrity_end_to_end.py` | Compra/produção e restauração/offline com falhas de gravação e reabertura. |
+| `test_font_checks.py` | Fontes ausentes, cobertura de caracteres e desenho ilegível; validação no plugin nativo da plataforma. |
 
 Execute a partir da raiz do repositório, usando perfis temporários:
 
@@ -241,6 +249,8 @@ calcular o SHA-256. Dentro do próprio executável, cenários privados verificam
 tutorial, lotes, compra pendente com tentativa de gravação sem nova cobrança,
 preservação/restauração, equivalência temporal e compatibilidade antiga. A
 verificação exige também a identificação do commit incorporado ao build.
+O binário verifica os glifos das fontes e produz `packaged-window.png` a partir
+da própria janela, para permitir inspeção direta da distribuição congelada.
 Esses cenários não alteram perfis de jogadores nem expõem atalhos de progressão.
 O workflow executa os testes, as capturas nas quatro escalas de DPI, o benchmark
 e a verificação do binário antes de publicar uma tag. O executável é novo e

@@ -1,6 +1,7 @@
 @echo off
 setlocal
 set PYTHONUTF8=1
+set QT_QPA_PLATFORM=windows
 cd /d "%~dp0"
 where py >nul 2>&1
 if errorlevel 1 (

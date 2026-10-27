@@ -59,6 +59,7 @@ def main(argv=None):
     from game.storage import RecoveryRequired, SaveStore
     from game.diagnostics import attach_log, detach_log
     from ui.window import FarmWindow
+    from tools.font_checks import ReadableFontError, check_readable_fonts
 
     app = QApplication.instance() or QApplication(sys.argv[:1])
     app.setApplicationName("IdleFarm")
@@ -83,6 +84,15 @@ def main(argv=None):
 
             def finish():
                 try:
+                    window.ensurePolished()
+                    app.processEvents()
+                    font_check = check_readable_fonts(window)
+                    screenshot = args.smoke.with_suffix(".png")
+                    screenshot.parent.mkdir(parents=True, exist_ok=True)
+                    if not window.grab().save(str(screenshot)):
+                        raise OSError("Não foi possível capturar a interface do executável.")
+                    if not font_check["ok"]:
+                        raise ReadableFontError(font_check)
                     startup_scene = window.scene.scene
                     for scene in SCENES:
                         window.area_actions[scene].trigger()
@@ -111,6 +121,8 @@ def main(argv=None):
                             else None
                         ),
                         "feature_checks": feature_checks,
+                        "font_check": font_check,
+                        "screenshot": str(screenshot),
                         "save_status": farm.persistence.status.value,
                         "startup_scene": startup_scene,
                         "logical_resolution": [WIDTH, HEIGHT],
@@ -136,7 +148,10 @@ def main(argv=None):
                 except Exception as exc:
                     # Smoke errors are reported as failed checks, never hidden
                     # or treated as a successful build.
-                    write_smoke_report(args.smoke, {"ok": False, "error": str(exc)})
+                    failure = {"ok": False, "error": str(exc)}
+                    if isinstance(exc, ReadableFontError):
+                        failure["font_check"] = exc.report
+                    write_smoke_report(args.smoke, failure)
                     app.exit(1)
 
             QTimer.singleShot(400, finish)

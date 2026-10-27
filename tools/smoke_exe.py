@@ -5,6 +5,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import shutil
 import struct
 import subprocess
 import sys
@@ -45,8 +46,17 @@ def main():
                 raise AssertionError(f"Packaged app exit {run.returncode}: {run.stderr}")
             result = json.loads(report.read_text(encoding="utf-8"))
             assert result["ok"] and result["packaged"] and len(result["scenes"]) == 6, result
-            assert result["version"] == "0.3.0" and result["startup_scene"] == "fields", result
+            assert result["version"] == "0.3.1" and result["startup_scene"] == "fields", result
             assert result["save_status"] == "saved", result
+            font_check = result["font_check"]
+            assert font_check["ok"] and font_check["font_count"] > 0, result
+            if sys.platform == "win32":
+                assert font_check["platform"] == "windows", result
+            screenshot = report.with_suffix(".png")
+            assert screenshot.is_file() and screenshot.read_bytes().startswith(b"\x89PNG\r\n\x1a\n"), result
+            shutil.copyfile(screenshot, out / f"smoke-{iteration + 1}.png")
+            if iteration == 0:
+                shutil.copyfile(screenshot, out / "packaged-window.png")
             assert result["build_commit"], result
             expected_commit = os.getenv("IDLEFARM_BUILD_COMMIT")
             if expected_commit:
@@ -113,9 +123,11 @@ def main():
         "recovery_guard_verified": True,
         "cwd_independent": True,
         "save_restored": True,
-        "version": "0.3.0",
+        "version": "0.3.1",
         "commit": result["build_commit"],
         "feature_checks": checks,
+        "font_check": font_check,
+        "screenshot": "packaged-window.png",
         "scenes": 6,
     }
     (out / "executable.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")

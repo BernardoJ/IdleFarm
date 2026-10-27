@@ -1,7 +1,7 @@
 # Validação da reformulação 0.2.0
 
 Este relatório registra a entrega gráfica 0.2.0. Para as correções de saves,
-tutorial, lotes e política temporal da 0.3.0, consulte
+tutorial, lotes e política temporal da 0.3.1, consulte
 [Estabilidade e recuperação](ESTABILIDADE.md) e os relatórios do workflow atual.
 
 ## Código e compatibilidade

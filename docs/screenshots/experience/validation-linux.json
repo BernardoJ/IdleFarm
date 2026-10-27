@@ -1,5 +1,5 @@
 {
-  "version": "0.3.0",
+  "version": "0.3.1",
   "checks": {
     "selected_empty_plot_outside_filter_retained": true,
     "selected_plot_visible": true,
@@ -10,6 +10,50 @@
     "save_retry_recovers": true,
     "one_minute_tutorial_visible": true,
     "recovery_does_not_replace_progress": true
+  },
+  "font_checks": {
+    "management-filter.png": {
+      "ok": true,
+      "platform": "offscreen",
+      "font_count": 5,
+      "checked_widgets": 26,
+      "missing": []
+    },
+    "batch-confirmation.png": {
+      "ok": true,
+      "platform": "offscreen",
+      "font_count": 1,
+      "checked_widgets": 8,
+      "missing": []
+    },
+    "save-error.png": {
+      "ok": true,
+      "platform": "offscreen",
+      "font_count": 5,
+      "checked_widgets": 27,
+      "missing": []
+    },
+    "tutorial.png": {
+      "ok": true,
+      "platform": "offscreen",
+      "font_count": 5,
+      "checked_widgets": 27,
+      "missing": []
+    },
+    "recovery.png": {
+      "ok": true,
+      "platform": "offscreen",
+      "font_count": 3,
+      "checked_widgets": 8,
+      "missing": []
+    },
+    "recovery-details.png": {
+      "ok": true,
+      "platform": "offscreen",
+      "font_count": 3,
+      "checked_widgets": 9,
+      "missing": []
+    }
   },
   "management": {
     "owned_plots": 12,
@@ -63,6 +107,7 @@
     "primary_player_message": "Não foi possível abrir o seu progresso salvo. Seus arquivos foram preservados. Você pode tentar novamente, recuperar uma cópia de segurança ou escolher uma nova fazenda."
   },
   "ok": true,
+  "font_failures": [],
   "clipped_controls": [],
   "captures": [
     "management-filter.png",
@@ -75,6 +120,6 @@
   "capture_count": 6,
   "device_pixel_ratio": 1.0,
   "platform": "linux",
-  "timestamp": "2026-10-27T20:02:12.643835+00:00",
+  "timestamp": "2026-10-27T20:27:56.136729+00:00",
   "profiles": "temporary and isolated; no real saves read or written"
 }

@@ -20,6 +20,7 @@ from config.data import SCENES, NAMES
 from game.engine import Farm
 from game.storage import SaveStore
 from tools.simulation import VirtualClock, full_playthrough
+from tools.font_checks import check_readable_fonts
 from ui.window import FarmWindow
 from visual.scene import time_label
 
@@ -51,6 +52,7 @@ def main():
             window.toggle_manage()
         app.processEvents()
         clipped = []
+        font_checks = {}
         scene_images = {}
         for scene in SCENES:
             window.navigate(scene)
@@ -64,6 +66,7 @@ def main():
                 window.scene.repaint()
                 app.processEvents()
                 window.grab().save(str(output / f"{scene}-{period}.png"))
+                font_checks[f"{scene}-{period}.png"] = check_readable_fonts(window)
                 raw = window.renderer.render(farm, scene, moment, phase=1)
                 raw.save(str(output / f"{scene}-{period}-scene.png"))
                 scene_images[scene, period] = Image.open(output / f"{scene}-{period}-scene.png").convert(
@@ -125,8 +128,14 @@ def main():
         )
         report.update(
             {
-                "ok": not clipped,
+                "ok": not clipped and all(check["ok"] for check in font_checks.values()),
                 "clipped_controls": clipped,
+                "font_checks": font_checks,
+                "font_failures": [
+                    {"capture": name, **failure}
+                    for name, check in font_checks.items()
+                    for failure in check["missing"]
+                ],
                 "scenes_captured": 12,
                 "logical_resolution": [512, 288],
                 "animation_preview_frames": len(animation),
@@ -145,6 +154,8 @@ def main():
     if os.getenv("GITHUB_ACTIONS") == "true":
         for control in clipped:
             print("::error title=IdleFarm layout::" + json.dumps(control, ensure_ascii=True))
+        for failure in report["font_failures"]:
+            print("::error title=IdleFarm fonts::" + json.dumps(failure, ensure_ascii=True))
     return 0 if report["ok"] else 1
 
 

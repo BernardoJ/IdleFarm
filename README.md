@@ -1,4 +1,4 @@
-# IdleFarm 0.3.0 · um canto para cultivar
+# IdleFarm 0.3.1 · um canto para cultivar
 
 Jogo incremental de fazenda para desktop, em **Python 3.12 + PySide6**.
 Cinco culturas, cinco instalações, doze espécies/raças e seis ambientes originais
@@ -14,14 +14,14 @@ O jogo funciona sem internet.
 
 ## Jogar no Windows
 
-**[Baixar IdleFarm.exe · Windows 64 bits](https://github.com/BernardoJ/IdleFarm/releases/download/v0.3.0/IdleFarm.exe)** · [Release e checksums](https://github.com/BernardoJ/IdleFarm/releases/tag/v0.3.0)
+**[Baixar IdleFarm.exe · Windows 64 bits](https://github.com/BernardoJ/IdleFarm/releases/download/v0.3.1/IdleFarm.exe)** · [Release e checksums](https://github.com/BernardoJ/IdleFarm/releases/tag/v0.3.1)
 
 O workflow [Windows x64](.github/workflows/windows-release.yml) gera
 `IdleFarm.exe` e, para tags de versão, publica o arquivo e `SHA256SUMS.txt` na
 aba [Releases](https://github.com/BernardoJ/IdleFarm/releases).
-Uma release só é criada após testes, build e duas inicializações do próprio
-executável no Windows. A existência deste código não comprova que o workflow
-já executou: confira a execução em [Actions](https://github.com/BernardoJ/IdleFarm/actions).
+Uma release só é criada após testes, build e três inicializações do próprio
+executável no Windows, incluindo a recusa segura de um save inválido. Confira
+a execução correspondente em [Actions](https://github.com/BernardoJ/IdleFarm/actions).
 
 Baixe o executável, salve em qualquer pasta e abra com dois cliques. Não precisa instalar Python. O save fica em
 `%APPDATA%\IdleFarm\save.json`; mover o executável não move nem apaga o progresso.
@@ -115,8 +115,9 @@ python tools/validate_experience.py --output qa-output/experience
 python tools/benchmark.py --output qa-output/performance.json
 ```
 
-Em um servidor Linux sem tela, defina `QT_QPA_PLATFORM=offscreen`. A aplicação
-também possui um smoke test que exige um perfil isolado:
+No Windows, as capturas usam o plugin nativo `windows` e verificam os glifos
+das fontes. Em um servidor Linux sem tela, defina `QT_QPA_PLATFORM=offscreen`.
+A aplicação também possui um smoke test que exige um perfil isolado:
 
 ```powershell
 python main.py --save qa-output/profile/save.json --smoke qa-output/source.json
@@ -124,9 +125,11 @@ python main.py --save qa-output/profile/save.json --smoke qa-output/source.json
 
 No Windows, execute `build_windows.bat`. O script instala dependências, roda
 os testes, gera `dist/IdleFarm.exe`, inicia o executável em uma pasta temporária
-duas vezes e grava seu SHA-256. O teste do próprio binário também verifica
-tutorial, lotes, repetição segura de salvamento, recuperação, retomada e o
-commit de origem, usando perfis temporários. Alternativamente:
+três vezes, incluindo a proteção de recuperação, e grava seu SHA-256. O teste
+do próprio binário também verifica tutorial, lotes, repetição segura de
+salvamento, recuperação, retomada, commit de origem e fontes legíveis, usando
+perfis temporários. A captura `packaged-window.png` vem do próprio executável.
+Alternativamente:
 
 ```powershell
 python -m PyInstaller --noconfirm --clean IdleFarm.spec
@@ -135,7 +138,7 @@ python tools/smoke_exe.py dist/IdleFarm.exe --output qa-output/packaged
 
 O PyInstaller gera binários nativos: em Linux, a saída é Linux. O executável
 Windows x64 deve ser gerado no Windows ou pelo workflow Windows incluído.
-Para publicar uma versão, envie uma tag, por exemplo `v0.3.0`; a publicação é
+Para publicar uma versão, envie uma tag, por exemplo `v0.3.1`; a publicação é
 automática somente se todos os passos do workflow passarem.
 
 ## Arquitetura e persistência

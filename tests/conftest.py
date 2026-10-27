@@ -3,7 +3,7 @@ import pytest
 from game.engine import Farm
 from game.storage import SaveStore
 
-os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+os.environ.setdefault("QT_QPA_PLATFORM", "windows" if os.name == "nt" else "offscreen")
 if os.name != "nt":
     os.environ.setdefault("XDG_CACHE_HOME", "/tmp/idlefarm-qt-cache")
 

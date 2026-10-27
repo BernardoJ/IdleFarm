@@ -24,6 +24,7 @@ from game.persistence import SaveStatus
 from game.state import fresh
 from game.storage import RecoveryRequired, SaveStore
 from tools.simulation import VirtualClock, full_playthrough
+from tools.font_checks import check_readable_fonts
 from ui.plot_tools import ReplantDialog
 from ui.recovery import RecoveryDialog
 from ui.window import FarmWindow
@@ -60,6 +61,7 @@ def capture(widget, output, name, app, clipped):
                         "kind": "label",
                     }
                 )
+    return check_readable_fonts(widget)
 
 
 def show_farm(farm, app):
@@ -118,7 +120,9 @@ def capture_management(output, app, clipped, report, profiles):
                 and farm.remaining(3) > 0,
             }
         )
-        capture(window, output, "management-filter.png", app, clipped)
+        report["font_checks"]["management-filter.png"] = capture(
+            window, output, "management-filter.png", app, clipped
+        )
 
         batch = ReplantDialog(farm, "carrot", parent=window)
         batch.show()
@@ -134,7 +138,9 @@ def capture_management(output, app, clipped, report, profiles):
         report["checks"]["affordable_proposal_requires_confirmation"] = (
             batch.selection is None and batch.confirm.isEnabled() and 0 < quote["cost"] <= quote["balance"]
         )
-        capture(batch, output, "batch-confirmation.png", app, clipped)
+        report["font_checks"]["batch-confirmation.png"] = capture(
+            batch, output, "batch-confirmation.png", app, clipped
+        )
         batch.close()
         batch = None
 
@@ -156,7 +162,7 @@ def capture_management(output, app, clipped, report, profiles):
             and window.retry_save.isVisible()
             and farm.state["plots"][selected] is not None
         )
-        capture(window, output, "save-error.png", app, clipped)
+        report["font_checks"]["save-error.png"] = capture(window, output, "save-error.png", app, clipped)
     finally:
         # Never leave the simulated writer installed when closeEvent saves.
         farm.store.save = writer
@@ -190,7 +196,7 @@ def capture_tutorial(output, app, clipped, report, profiles):
             and farm.tutorial_phase == "growing"
             and window.tutorial_info.isVisible()
         )
-        capture(window, output, "tutorial.png", app, clipped)
+        report["font_checks"]["tutorial.png"] = capture(window, output, "tutorial.png", app, clipped)
     finally:
         window.close()
         app.processEvents()
@@ -212,9 +218,11 @@ def capture_recovery(output, app, clipped, report, profiles):
         raise AssertionError("O perfil de validação deve exigir uma decisão de recuperação.")
     try:
         dialog.show()
-        capture(dialog, output, "recovery.png", app, clipped)
+        report["font_checks"]["recovery.png"] = capture(dialog, output, "recovery.png", app, clipped)
         dialog.toggle_details()
-        capture(dialog, output, "recovery-details.png", app, clipped)
+        report["font_checks"]["recovery-details.png"] = capture(
+            dialog, output, "recovery-details.png", app, clipped
+        )
         report["recovery"] = {
             "backup_available": dialog.restore_button.isEnabled(),
             "details_read_only": dialog.details.isReadOnly(),
@@ -240,7 +248,7 @@ def main():
     quit_on_close = app.quitOnLastWindowClosed()
     app.setQuitOnLastWindowClosed(False)
     clipped = []
-    report = {"version": VERSION, "checks": {}}
+    report = {"version": VERSION, "checks": {}, "font_checks": {}}
     try:
         with tempfile.TemporaryDirectory(prefix="idlefarm-experience-qa-") as directory:
             profiles = Path(directory)
@@ -259,7 +267,14 @@ def main():
     ]
     report.update(
         {
-            "ok": not clipped and all(report["checks"].values()),
+            "ok": not clipped
+            and all(report["checks"].values())
+            and all(check["ok"] for check in report["font_checks"].values()),
+            "font_failures": [
+                {"capture": name, **failure}
+                for name, check in report["font_checks"].items()
+                for failure in check["missing"]
+            ],
             "clipped_controls": clipped,
             "captures": captures,
             "capture_count": len(captures),
@@ -276,6 +291,8 @@ def main():
     if os.getenv("GITHUB_ACTIONS") == "true":
         for control in clipped:
             print("::error title=IdleFarm experience layout::" + json.dumps(control, ensure_ascii=True))
+        for failure in report["font_failures"]:
+            print("::error title=IdleFarm fonts::" + json.dumps(failure, ensure_ascii=True))
     return 0 if report["ok"] else 1
 
 

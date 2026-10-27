@@ -1,4 +1,9 @@
-## IdleFarm 0.3.0 · cuidar da fazenda com mais segurança
+## IdleFarm 0.3.1 · cuidar da fazenda com mais segurança
+
+A v0.3.1 corrige a validação das fontes no Windows: as capturas usam a
+renderização nativa, e a presença e o desenho dos glifos são verificados nas
+capturas e no executável. A v0.3.0 ficou como prévia após a inspeção identificar
+texto em quadrados nas evidências do modo offscreen.
 
 Esta versão corrige o indicador de salvamento, o tratamento de arquivos
 inválidos e a seleção dos canteiros. Acrescenta ferramentas para fazendas
@@ -52,7 +57,8 @@ A publicação desta Release depende da aprovação dos testes funcionais e de
 interface, das capturas em DPI 100%, 125%, 150% e 200%, do benchmark, do build
 Windows limpo e do teste do próprio executável com perfis isolados. O binário
 verifica tutorial, lotes, retomada, recuperação e repetição segura de salvamento,
-além de registrar seu commit de origem.
+além de registrar seu commit de origem e verificar a legibilidade das fontes
+na renderização nativa do Windows.
 `SHA256SUMS.txt` contém o checksum; `executable.json` e `performance.json`
 registram as verificações do binário e do renderizador. Os demais relatórios e
 capturas ficam no artefato da execução do GitHub Actions.

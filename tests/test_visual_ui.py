@@ -155,6 +155,12 @@ def test_source_app_smoke_from_other_working_directory(tmp_path):
     assert result.returncode == 0, result.stderr
     data = json.loads(report.read_text(encoding="utf-8"))
     assert data["ok"] and not data["packaged"] and data["scenes"] == list(SCENES)
+    assert data["font_check"]["ok"] and data["font_check"]["font_count"] > 0
+    if sys.platform == "win32":
+        assert data["font_check"]["platform"] == "windows"
+    screenshot = report.with_suffix(".png")
+    assert Path(data["screenshot"]) == screenshot
+    assert screenshot.read_bytes().startswith(b"\x89PNG\r\n\x1a\n")
 
 
 def test_single_profile_lock_prevents_concurrent_accounting(app, tmp_path):

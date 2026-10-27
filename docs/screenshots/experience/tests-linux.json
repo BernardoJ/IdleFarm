@@ -1,11 +1,13 @@
 {
-  "tests": 258,
+  "tests": 264,
   "failures": 0,
   "errors": 0,
   "skipped": 0,
-  "passed": 258,
+  "passed": 264,
   "platform": "linux",
   "baseline_passed": 76,
   "phase1_passed": 142,
-  "source_commit": "9ea3c82c3aefbf0cf56934c832d0673c752631be"
+  "version": "0.3.1",
+  "source_tree": "working tree validated before the release commit",
+  "duration_seconds": 8.888
 }
