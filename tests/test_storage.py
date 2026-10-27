@@ -20,7 +20,9 @@ def test_failed_atomic_replace_keeps_previous_save(farm, monkeypatch):
     monkeypatch.setattr(os, "replace", fail)
     with pytest.raises(OSError):
         farm.plant(0, "wheat")
-    assert farm.state == before
+    assert farm.state["coins"] == before["coins"] - 5
+    assert farm.state["plots"][0]["crop"] == "wheat"
+    assert farm.persistence.dirty and farm.persistence.last_error
     assert farm.store.path.read_bytes() == data
     assert not list(farm.store.path.parent.glob("*.tmp"))
 

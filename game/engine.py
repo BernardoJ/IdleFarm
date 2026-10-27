@@ -7,24 +7,42 @@ import time
 
 from config.data import ANIMALS, BUILDINGS, CATALOG, CROPS, SCENES, geometric_price
 from game.state import fresh, validate
+from game.persistence import SaveProgress
 
 
 class GameError(ValueError):
     """An expected, user-readable action failure."""
 
 
+class PendingSaveError(OSError):
+    """The business action completed once; only persistence needs a retry."""
+
+    def __init__(self, error, result=None):
+        super().__init__("A ação foi aplicada nesta janela, mas ainda não foi possível salvar.")
+        self.result = result
+        self.error = error
+
+
 def transaction(method):
     @wraps(method)
     def atomic(self, *args, **kwargs):
+        self.advance()
         before = deepcopy(self.state)
         try:
-            self.advance()
             result = method(self, *args, **kwargs)
-            self.save()
-            return result
         except Exception:
+            # Roll back an invalid business action and propagate its original error.
             self.state = before
             raise
+        if self.state != before:
+            self.persistence.changed()
+        # A completed purchase stays pending in memory if writing fails. Retrying
+        # persistence must never execute the purchase or charge the player again.
+        try:
+            self.save()
+        except OSError as exc:
+            raise PendingSaveError(exc, result) from exc
+        return result
 
     return atomic
 
@@ -34,6 +52,10 @@ class Farm:
         self.store, self.clock = store, clock
         data = store.load() if store else None
         self.state = validate(data) if data else fresh(clock())
+        self.persistence = SaveProgress()
+        self._persisted_state = deepcopy(data)
+        if data is not None:
+            self.persistence.saved_generation = 0
         self.offline_reward = self.advance(offline=True)
         self.save()  # Commit the offline payment before showing it, preventing reopening exploits.
 
@@ -42,8 +64,24 @@ class Farm:
         return max(self.clock(), self.state["last_accounted"])
 
     def save(self):
-        if self.store:
-            self.store.save(self.state)
+        if self.persistence.saving or self.store is None:
+            return False
+        if self.state != self._persisted_state and not self.persistence.dirty:
+            self.persistence.changed()
+        if not self.persistence.dirty and self.persistence.last_error is None:
+            return True
+        snapshot = deepcopy(self.state)
+        generation = self.persistence.begin()
+        try:
+            self.store.save(snapshot)
+        except OSError as exc:
+            self.persistence.fail(exc)
+            raise
+        self._persisted_state = snapshot
+        if self.state != snapshot and self.persistence.generation == generation:
+            self.persistence.changed()
+        self.persistence.complete(generation)
+        return not self.persistence.dirty
 
     def advance(self, offline=False):
         now = self.now
@@ -64,6 +102,8 @@ class Farm:
         self.state["earned"] += gain
         self.state["animal_earned"] += gain
         self._unlock()
+        if now != last or gain:
+            self.persistence.changed()
         return gain
 
     def _unlock(self):

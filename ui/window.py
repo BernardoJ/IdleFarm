@@ -26,7 +26,8 @@ from PySide6.QtWidgets import (
 
 from config.data import ANIMALS, BUILDINGS, CROPS, NAMES, ROOT, SCENES
 from config.version import VERSION
-from game.engine import GameError
+from game.engine import GameError, PendingSaveError
+from game.persistence import SaveStatus
 from visual.scene import Renderer, SceneWidget, time_label
 
 STYLE = """
@@ -90,6 +91,7 @@ class FarmWindow(QMainWindow):
         }
         self.messages = deque(maxlen=3)
         self.last_save = time.monotonic()
+        self.last_save_attempt = self.last_save
         self.setWindowTitle(f"IdleFarm {VERSION} · um canto para cultivar")
         self.setWindowIcon(QIcon(str(ROOT / "assets/icon.png")))
         self.setStyleSheet(STYLE)
@@ -169,6 +171,15 @@ class FarmWindow(QMainWindow):
             self.create_building(building)
         self.production = label("", True)
         layout.addWidget(self.production)
+        save_row = QHBoxLayout()
+        self.save_info = label()
+        self.save_info.setObjectName("save_state")
+        save_row.addWidget(self.save_info, 1)
+        self.retry_save = QPushButton("Tentar salvar")
+        self.retry_save.clicked.connect(self.save_now)
+        save_row.addWidget(self.retry_save)
+        layout.addLayout(save_row)
+        farm.persistence.subscribe(self.refresh_save_state)
         self.notice = label("Bem-vindo! Selecione um terreno e plante sua primeira semente.")
         self.notice.setObjectName("notice")
         self.notice.setMinimumHeight(29)
@@ -303,12 +314,22 @@ class FarmWindow(QMainWindow):
         box.addStretch()
 
     def act(self, action, message):
+        generation = self.farm.persistence.saved_generation
         try:
             result = action()
+            if self.farm.persistence.saved_generation != generation:
+                self.last_save_attempt = self.last_save = time.monotonic()
             self.notify(message)
             self.refresh()
             return result
+        except PendingSaveError as exc:
+            self.last_save_attempt = time.monotonic()
+            self.notify(message + " Alterações ainda não salvas; tente salvar novamente.")
+            self.refresh()
+            return exc.result
         except (GameError, OSError) as exc:
+            if isinstance(exc, OSError):
+                self.last_save_attempt = time.monotonic()
             self.notify(str(exc))
             self.refresh()
             return None
@@ -321,6 +342,33 @@ class FarmWindow(QMainWindow):
     def notify(self, text):
         self.messages.append((time.monotonic(), text))
         self.notice.setText(text)
+
+    def refresh_save_state(self):
+        state = self.farm.persistence
+        messages = {
+            SaveStatus.SAVED: "Tudo salvo",
+            SaveStatus.SAVING: "Salvando…",
+            SaveStatus.PENDING: "Alterações não salvas",
+            SaveStatus.ERROR: "Erro ao salvar · alterações não salvas",
+        }
+        self.save_info.setText(messages[state.status])
+        self.save_info.setToolTip(state.last_error or "O progresso é salvo após ações e automaticamente.")
+        self.retry_save.setVisible(state.status == SaveStatus.ERROR)
+
+    def save_now(self):
+        self.last_save_attempt = time.monotonic()
+        try:
+            saved = self.farm.save()
+            if saved:
+                self.last_save = self.last_save_attempt
+            return saved
+        except OSError:
+            self.notify(
+                "Não foi possível salvar. O progresso continua pendente nesta janela. Tente novamente."
+            )
+            return False
+        finally:
+            self.refresh_save_state()
 
     def select_plot(self, index):
         self.plots.setCurrentIndex(index)
@@ -363,15 +411,13 @@ class FarmWindow(QMainWindow):
         self.adjustSize()
 
     def tick(self):
-        try:
-            gained = self.farm.advance()
-            if gained:
-                self.notify(f"Produção da fazenda · +{money(gained)} moedas.")
-            if gained or time.monotonic() - self.last_save >= 30:
-                self.farm.save()
-                self.last_save = time.monotonic()
-        except OSError:
-            self.notify("Não foi possível salvar. Verifique o espaço e a permissão da pasta de saves.")
+        gained = self.farm.advance()
+        if gained:
+            self.notify(f"Produção da fazenda · +{money(gained)} moedas.")
+        failed = self.farm.persistence.last_error is not None
+        due = time.monotonic() - self.last_save_attempt >= (10 if failed else 30)
+        if self.farm.persistence.dirty and (due or (gained and not failed)):
+            self.save_now()
         self.refresh()
 
     def refresh(self):
@@ -460,7 +506,8 @@ class FarmWindow(QMainWindow):
             f"{len(state['plots'])} terrenos  ·  {total} animais  ·  {self.farm.hourly():.1f} moedas/h  ·  Produzido: {money(state['animal_earned'])}  ·  Offline: até 4h"
         )
         if self.messages and time.monotonic() - self.messages[-1][0] > 12:
-            self.notice.setText("Tudo salvo. Crescer também é saber esperar.")
+            self.notice.setText("Crescer também é saber esperar.")
+        self.refresh_save_state()
 
     def help(self):
         dialog = QDialog(self)
