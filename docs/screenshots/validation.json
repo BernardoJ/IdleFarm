@@ -34,8 +34,13 @@
   "ok": true,
   "clipped_controls": [],
   "scenes_captured": 12,
+  "logical_resolution": [
+    512,
+    288
+  ],
+  "animation_preview_frames": 18,
   "device_pixel_ratio": 1.0,
   "platform": "linux",
-  "timestamp": "2026-10-26T23:34:26.923917+00:00",
+  "timestamp": "2026-10-27T02:02:55.968877+00:00",
   "application_tests": "Use python -m pytest for the complete suite."
 }

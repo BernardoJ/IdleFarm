@@ -4,8 +4,8 @@ from collections import deque
 from datetime import datetime
 import math
 import time
-from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QFontMetrics, QIcon, QPixmap
+from PySide6.QtCore import QSize, Qt, QTimer
+from PySide6.QtGui import QActionGroup, QIcon, QPixmap
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
@@ -14,35 +14,46 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QMainWindow,
+    QMenu,
     QMessageBox,
     QPushButton,
     QScrollArea,
     QStackedWidget,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
 
 from config.data import ANIMALS, BUILDINGS, CROPS, NAMES, ROOT, SCENES
+from config.version import VERSION
 from game.engine import GameError
 from visual.scene import Renderer, SceneWidget, time_label
 
 STYLE = """
-QWidget { background: #263b32; color: #f0e5c8; font-family: 'Segoe UI', sans-serif; font-size: 12px; }
-QMainWindow { border: 2px solid #a68b58; }
+QWidget { background: #2c342b; color: #f4e7c6; font-family: 'Segoe UI', sans-serif; font-size: 12px; }
+QMainWindow { border: 3px solid #a68b58; }
 QLabel { background: transparent; }
-QLabel#title { font-size: 21px; font-weight: 800; color: #e6c780; letter-spacing: 3px; }
-QLabel#coins { font-size: 19px; font-weight: bold; color: #f2ce7f; }
-QLabel#muted { color: #b0bba1; font-size: 11px; }
-QLabel#notice { color: #e8ce8e; padding: 4px; background: #314a3b; border-left: 3px solid #bba36b; }
-QPushButton { background: #3f5740; border: 1px solid #849366; border-bottom: 3px solid #172d24;
-              border-radius: 2px; padding: 5px 8px; min-height: 19px; }
-QPushButton:hover { background: #526c49; border-color: #dcc58b; }
-QPushButton:pressed, QPushButton:checked { background: #8b754b; color: #fff0cc; }
-QPushButton:disabled { color: #8e9885; border-color: #50604b; background: #304536; }
-QComboBox { padding: 5px; border: 1px solid #ae9868; background: #314a3b; min-height: 19px; }
+QLabel#title { font-family: Georgia, serif; font-size: 23px; font-weight: bold; color: #e8c581; letter-spacing: 3px; }
+QLabel#coins { font-size: 18px; font-weight: bold; color: #f2ce7f; padding: 4px 8px;
+              border: 1px solid #97835a; background: #26392e; }
+QLabel#muted { color: #c0bda2; font-size: 11px; }
+QLabel#notice { color: #f0d9a5; padding: 5px; background: #3e4431; border-left: 3px solid #bba36b; }
+QPushButton, QToolButton { background: #6b593c; border: 1px solid #b79b65;
+              border-top: 2px solid #c4aa75; border-bottom: 3px solid #3d3023;
+              border-radius: 0px; padding: 5px 8px; min-height: 19px; }
+QPushButton:hover, QToolButton:hover { background: #806b46; border-color: #e4cb91; }
+QPushButton:pressed, QPushButton:checked, QToolButton:pressed { background: #8b754b; color: #fff0cc; }
+QPushButton:disabled { color: #a49e88; border-color: #655f48; background: #444a39; }
+QToolButton::menu-indicator { subcontrol-position: right center; right: 6px; }
+QToolButton { padding-right: 20px; }
+QMenu { background: #3c4431; border: 2px solid #b79b65; padding: 5px; }
+QMenu::item { padding: 8px 28px; }
+QMenu::item:selected { background: #806b46; }
+QLabel#current_area { font-size: 15px; font-weight: bold; color: #e6c780; }
+QComboBox { padding: 5px; border: 1px solid #ae9868; background: #3c4431; min-height: 19px; }
 QComboBox QAbstractItemView { background: #314a3b; selection-background-color: #7b724c; }
 QCheckBox { spacing: 4px; }
-QScrollArea { border: 1px solid #7c8056; background: #263b32; }
+QScrollArea { border: 2px solid #958359; background: #2c342b; }
 QScrollBar:vertical { width: 10px; background: #263b32; }
 QScrollBar::handle:vertical { background: #8a9165; min-height: 24px; }
 QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0px; }
@@ -74,9 +85,12 @@ class FarmWindow(QMainWindow):
         super().__init__()
         self.farm = farm
         self.renderer = Renderer()
+        self.icons = {
+            key: QIcon(QPixmap.fromImage(self.renderer.icon(key))) for key in (*SCENES, *CROPS, *ANIMALS)
+        }
         self.messages = deque(maxlen=3)
         self.last_save = time.monotonic()
-        self.setWindowTitle("IdleFarm · um canto para cultivar")
+        self.setWindowTitle(f"IdleFarm {VERSION} · um canto para cultivar")
         self.setWindowIcon(QIcon(str(ROOT / "assets/icon.png")))
         self.setStyleSheet(STYLE)
         self.setMinimumWidth(570)
@@ -89,6 +103,7 @@ class FarmWindow(QMainWindow):
         title = label("IDLEFARM")
         title.setObjectName("title")
         header.addWidget(title)
+        header.addWidget(label("v" + VERSION, True))
         header.addStretch()
         self.coins = label()
         self.coins.setObjectName("coins")
@@ -108,23 +123,38 @@ class FarmWindow(QMainWindow):
         help_button.clicked.connect(self.help)
         bar.addWidget(help_button)
         layout.addLayout(bar)
+        navigation = QHBoxLayout()
+        self.area_icon = QLabel()
+        self.area_icon.setFixedSize(48, 27)
+        navigation.addWidget(self.area_icon)
+        self.current_area = label()
+        self.current_area.setObjectName("current_area")
+        navigation.addWidget(self.current_area)
+        navigation.addStretch()
+        self.area_menu_button = QToolButton()
+        self.area_menu_button.setObjectName("area_menu_button")
+        self.area_menu_button.setText("Áreas da fazenda")
+        self.area_menu_button.setAccessibleName("Menu de áreas da fazenda")
+        self.area_menu_button.setToolTip("Escolha a área da fazenda que deseja visitar.")
+        self.area_menu = QMenu(self.area_menu_button)
+        self.area_actions = {}
+        area_group = QActionGroup(self.area_menu)
+        area_group.setExclusive(True)
+        for key in SCENES:
+            action = self.area_menu.addAction(NAMES[key])
+            action.setIcon(self.icons[key])
+            action.setCheckable(True)
+            action.setObjectName("area_" + key)
+            area_group.addAction(action)
+            action.triggered.connect(lambda checked=False, k=key: self.navigate(k))
+            self.area_actions[key] = action
+        self.area_menu_button.setMenu(self.area_menu)
+        self.area_menu_button.setPopupMode(QToolButton.InstantPopup)
+        navigation.addWidget(self.area_menu_button)
+        layout.addLayout(navigation)
         self.scene = SceneWidget(farm, self.renderer)
         self.scene.plot_selected.connect(self.select_plot)
         layout.addWidget(self.scene)
-        tabs = QHBoxLayout()
-        tabs.setSpacing(3)
-        self.tabs = {}
-        for key in SCENES:
-            button = QPushButton(NAMES[key])
-            button.setCheckable(True)
-            button.setObjectName("tab_" + key)
-            button.ensurePolished()
-            # Native Windows font metrics can differ from Linux despite the same QSS.
-            button.setMinimumWidth(QFontMetrics(button.font()).horizontalAdvance(NAMES[key]) + 20)
-            button.clicked.connect(lambda checked=False, k=key: self.navigate(k))
-            tabs.addWidget(button)
-            self.tabs[key] = button
-        layout.addLayout(tabs)
         self.manage = QPushButton("Ocultar gerenciamento")
         self.manage.clicked.connect(self.toggle_manage)
         layout.addWidget(self.manage)
@@ -146,7 +176,7 @@ class FarmWindow(QMainWindow):
         self.heartbeat = QTimer(self)
         self.heartbeat.timeout.connect(self.tick)
         self.heartbeat.start(1000)
-        self.navigate(farm.state["preferences"]["scene"], save=False)
+        self.navigate("fields", save=False)
         self.refresh()
         self.setMinimumWidth(max(570, root.minimumSizeHint().width() + 4))
         self.resize(max(610, self.minimumWidth()), self.sizeHint().height())
@@ -196,8 +226,9 @@ class FarmWindow(QMainWindow):
         row = QHBoxLayout()
         self.crops = QComboBox()
         self.crops.setObjectName("crops")
+        self.crops.setIconSize(QSize(28, 26))
         for key, crop in CROPS.items():
-            self.crops.addItem(crop["name"], key)
+            self.crops.addItem(self.icons[key], crop["name"], key)
         self.crops.currentIndexChanged.connect(self.refresh)
         row.addWidget(label("Semente"))
         row.addWidget(self.crops, 1)
@@ -308,8 +339,10 @@ class FarmWindow(QMainWindow):
                 self.notify(str(exc))
         self.scene.scene = scene
         self.pages.setCurrentIndex(SCENES.index(scene))
-        for key, button in self.tabs.items():
-            button.setChecked(key == scene)
+        self.current_area.setText(NAMES[scene])
+        self.area_icon.setPixmap(self.icons[scene].pixmap(48, 27))
+        for key, action in self.area_actions.items():
+            action.setChecked(key == scene)
         self.scene.update()
 
     def toggle_top(self, checked):
@@ -446,7 +479,7 @@ class FarmWindow(QMainWindow):
         )
         box.addWidget(
             label(
-                "Construa instalações nas abas e compre animais. Cada animal produz individualmente; novas compras da mesma espécie custam 12% a mais. Cachorros são companheiros e não geram moedas. A produção total e a próxima entrega aparecem no gerenciamento."
+                "O jogo começa nas plantações. Use o menu Áreas da fazenda para visitar uma área por vez, construir instalações e comprar animais. Cada animal produz individualmente; novas compras da mesma espécie custam 12% a mais. Cachorros são companheiros e não geram moedas. A produção total e a próxima entrega aparecem no gerenciamento."
             )
         )
         box.addWidget(

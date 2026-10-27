@@ -44,6 +44,9 @@ def main():
                 raise AssertionError(f"Packaged app exit {run.returncode}: {run.stderr}")
             result = json.loads(report.read_text(encoding="utf-8"))
             assert result["ok"] and result["packaged"] and len(result["scenes"]) == 6, result
+            assert result["version"] == "0.2.0" and result["startup_scene"] == "fields", result
+            assert result["logical_resolution"] == [512, 288] and result["animal_frames"] == 72, result
+            assert len(result["interiors"]) == 5, result
             expected_coins = 50 if iteration == 0 else 37
             assert result["coins"] == expected_coins and save.exists(), result
             assert result["platform"] == sys.platform, result

@@ -12,6 +12,14 @@ if errorlevel 1 exit /b 1
 if errorlevel 1 exit /b 1
 .venv\Scripts\python.exe -m pytest -q
 if errorlevel 1 exit /b 1
+.venv\Scripts\python.exe -m ruff check .
+if errorlevel 1 exit /b 1
+.venv\Scripts\python.exe -m ruff format --check .
+if errorlevel 1 exit /b 1
+.venv\Scripts\python.exe tools\validate.py --output qa-output\visual
+if errorlevel 1 exit /b 1
+.venv\Scripts\python.exe tools\benchmark.py --output qa-output\performance.json
+if errorlevel 1 exit /b 1
 .venv\Scripts\python.exe -m PyInstaller --noconfirm --clean IdleFarm.spec
 if errorlevel 1 exit /b 1
 .venv\Scripts\python.exe tools\smoke_exe.py dist\IdleFarm.exe --output qa-output\packaged

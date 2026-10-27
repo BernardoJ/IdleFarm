@@ -13,15 +13,24 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 if sys.platform != "win32":
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-from PySide6.QtGui import QFontMetrics
-from PySide6.QtWidgets import QApplication, QLabel, QPushButton
-from PIL import Image, ImageDraw
+from PySide6.QtGui import QFontMetrics, QImage
+from PySide6.QtWidgets import QApplication, QLabel, QPushButton, QToolButton
+from PIL import Image, ImageDraw, ImageFont
 from config.data import SCENES, NAMES
 from game.engine import Farm
 from game.storage import SaveStore
 from tools.simulation import VirtualClock, full_playthrough
 from ui.window import FarmWindow
 from visual.scene import time_label
+
+
+def gallery_font():
+    for name in ("DejaVuSans.ttf", "arial.ttf", "LiberationSans-Regular.ttf"):
+        try:
+            return ImageFont.truetype(name, 14)
+        except OSError:
+            continue
+    return ImageFont.load_default(size=14)
 
 
 def main():
@@ -50,6 +59,7 @@ def main():
             for hour, period in ((12, "day"), (23, "night")):
                 moment = datetime(2026, 1, 1, hour)
                 window.scene.qa_moment = moment
+                window.scene.qa_phase = 1
                 window.time_info.setText(time_label(hour) + moment.strftime(" · %H:%M"))
                 window.scene.repaint()
                 app.processEvents()
@@ -59,7 +69,7 @@ def main():
                 scene_images[scene, period] = Image.open(output / f"{scene}-{period}-scene.png").convert(
                     "RGB"
                 )
-            for button in window.findChildren(QPushButton):
+            for button in window.findChildren(QPushButton) + window.findChildren(QToolButton):
                 if (
                     button.isVisible()
                     and QFontMetrics(button.font()).horizontalAdvance(button.text()) > button.width() - 14
@@ -80,18 +90,46 @@ def main():
         for period in ("day", "night"):
             gallery = Image.new("RGB", (1536, 624), "#263b32")
             draw = ImageDraw.Draw(gallery)
+            font = gallery_font()
             for i, scene in enumerate(SCENES):
                 x, y = (i % 3) * 512, (i // 3) * 312
                 gallery.paste(
                     scene_images[scene, period].resize((512, 288), Image.Resampling.NEAREST), (x, y + 24)
                 )
-                draw.text((x + 10, y + 6), NAMES[scene] + " / " + period, fill="#e6c780")
+                draw.text(
+                    (x + 10, y + 3),
+                    NAMES[scene] + " · " + ("DIA" if period == "day" else "NOITE"),
+                    fill="#e6c780",
+                    font=font,
+                )
             gallery.save(output / f"gallery-{period}.png")
+        # A real animation preview uses the renderer, never a gameplay time multiplier.
+        animation = []
+        for phase in (0, 1, 2, 3, 4, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 29, 32, 35):
+            gallery = Image.new("RGB", (1536, 624), "#263b32")
+            draw = ImageDraw.Draw(gallery)
+            for i, scene in enumerate(SCENES):
+                raw = window.renderer.render(farm, scene, datetime(2026, 1, 1, 12), phase=phase)
+                rgba = raw.convertToFormat(QImage.Format_RGBA8888)
+                frame = Image.frombytes(
+                    "RGBA",
+                    (raw.width(), raw.height()),
+                    bytes(rgba.constBits()),
+                ).convert("RGB")
+                x, y = (i % 3) * 512, (i // 3) * 312
+                gallery.paste(frame, (x, y + 24))
+                draw.text((x + 10, y + 3), NAMES[scene], fill="#e6c780", font=font)
+            animation.append(gallery)
+        animation[0].save(
+            output / "animations.gif", save_all=True, append_images=animation[1:], duration=300, loop=0
+        )
         report.update(
             {
                 "ok": not clipped,
                 "clipped_controls": clipped,
                 "scenes_captured": 12,
+                "logical_resolution": [512, 288],
+                "animation_preview_frames": len(animation),
                 "device_pixel_ratio": window.devicePixelRatioF(),
                 "platform": sys.platform,
                 "timestamp": datetime.now(timezone.utc).isoformat(),

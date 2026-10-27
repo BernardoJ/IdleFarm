@@ -1,19 +1,19 @@
-"""Original, deterministic, native-resolution pixel art. Pillow is build-time only.
+"""Export original illustrated sources as deterministic, sharp runtime atlases.
 
-No source assets are copied from PescaIdle. All silhouettes, textures, palettes
-and animation frames are authored here and exported as checked-in PNGs.
+Pillow is an authoring dependency only. Lossless sources live in assets/source;
+runtime assets need no generator, network, Pillow or AI service.
 """
 
+from collections import deque
+import json
 from pathlib import Path
-import random
 from PIL import Image, ImageDraw
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "assets"
-INK = "#293c37"
-WOOD = ("#654532", "#96613d", "#bd8752", "#e0b773")
-GRASS = ("#426c48", "#537f4b", "#689354", "#7fa75b", "#a0b968")
-SCENES = ("fields", "coop", "barn", "pigsty", "stable", "kennel")
+SOURCE = OUT / "source"
+SIZE = (512, 288)
+CELL = 96
 SPECIES = (
     "chicken",
     "duck",
@@ -28,402 +28,210 @@ SPECIES = (
     "collie",
     "golden",
 )
+SIZES = {
+    "chicken": (34, 34),
+    "duck": (42, 33),
+    "peacock": (62, 48),
+    "cow": (80, 65),
+    "goat": (58, 49),
+    "sheep": (57, 44),
+    "pig": (64, 40),
+    "horse": (86, 76),
+    "mutt": (43, 39),
+    "beagle": (48, 39),
+    "collie": (58, 45),
+    "golden": (63, 48),
+}
+FEATURES = {
+    "fields": ["tilled_soil", "paths", "fences", "trees", "flowers", "stones", "tools", "well"],
+    "coop": ["perches", "nests", "eggs", "straw", "feeders", "water", "feed_sacks", "feathers", "beams"],
+    "barn": ["hay_bales", "straw", "trough", "buckets", "partitions", "tools", "feed_sacks", "beams"],
+    "pigsty": ["mud_pool", "hoofprints", "pens", "trough", "water", "straw", "muddy_walls", "buckets"],
+    "stable": ["stalls", "hay_racks", "trough", "saddle", "bridles", "horseshoes", "tools", "beams"],
+    "kennel": ["beds", "blankets", "sleeping_cubbies", "bowls", "toys", "balls", "bones", "shelves", "rug"],
+}
+WINDOWS = {
+    "coop": [[143, 9, 32, 25], [341, 8, 35, 26]],
+    "barn": [[125, 5, 32, 22], [370, 5, 32, 22]],
+    "pigsty": [[116, 8, 44, 22], [357, 8, 45, 22]],
+    "stable": [[103, 6, 86, 23], [321, 6, 87, 23]],
+    "kennel": [[138, 0, 51, 43], [327, 0, 51, 43]],
+}
+LAMPS = {
+    "coop": [[228, 24], [456, 31]],
+    "barn": [[71, 34], [443, 34]],
+    "pigsty": [[64, 48], [446, 48]],
+    "stable": [[202, 33], [309, 33]],
+    "kennel": [[40, 58], [280, 47]],
+    "fields": [[43, 78]],
+}
+FOREGROUND = {
+    "fields": [[(0, 230), (60, 230), (102, 288), (0, 288)], [(465, 218), (512, 205), (512, 288), (425, 288)]],
+    "coop": [[(0, 235), (172, 235), (181, 288), (0, 288)], [(327, 236), (512, 235), (512, 288), (320, 288)]],
+    "barn": [[(0, 203), (144, 197), (164, 264), (0, 273)], [(366, 197), (512, 204), (512, 273), (355, 264)]],
+    "pigsty": [
+        [(0, 232), (139, 231), (145, 288), (0, 288)],
+        [(363, 229), (512, 231), (512, 288), (359, 288)],
+    ],
+    "stable": [[(0, 225), (80, 215), (103, 288), (0, 288)], [(420, 216), (512, 224), (512, 288), (410, 288)]],
+    "kennel": [
+        [(0, 225), (112, 230), (242, 271), (242, 288), (0, 288)],
+        [(275, 273), (400, 234), (512, 222), (512, 288), (275, 288)],
+    ],
+}
 
 
-def tree(d, x, y, seed, small=False):
-    r = random.Random(seed)
-    scale = 0.7 if small else 1
+def opaque_sprite(image):
+    """Remove faint generated matte noise; silhouettes use discrete pixel coverage."""
+    image = image.convert("RGBA")
+    image.putalpha(image.getchannel("A").point(lambda a: 255 if a >= 140 else 0))
+    return image
 
-    def box(bounds, color):
-        a, b, c, e = bounds
-        d.ellipse(
-            (x + int(a * scale), y + int(b * scale), x + int(c * scale), y + int(e * scale)), fill=color
+
+def components(image, crop_grid=False):
+    """Extract complete silhouettes, without neighbouring frames or matte specks."""
+    width, height = image.size
+    pixels = bytearray(image.getchannel("A").tobytes())
+    found = {}
+    for start in range(len(pixels)):
+        if not pixels[start]:
+            continue
+        pixels[start] = 0
+        queue = deque([start])
+        left = right = start % width
+        top = bottom = start // width
+        cluster = []
+        while queue:
+            index = queue.popleft()
+            x, y = index % width, index // width
+            left, right = min(left, x), max(right, x)
+            top, bottom = min(top, y), max(bottom, y)
+            cluster.append((x, y))
+            for near in (
+                index - 1 if x else -1,
+                index + 1 if x < width - 1 else -1,
+                index - width,
+                index + width,
+            ):
+                if 0 <= near < len(pixels) and pixels[near]:
+                    pixels[near] = 0
+                    queue.append(near)
+        count = len(cluster)
+        if count < (18 if crop_grid else 350):
+            continue
+        columns, rows = (4, 5) if crop_grid else (6, 4)
+        column = min(columns - 1, int((left + right) / 2 / (width / columns)))
+        row = (
+            max(0, min(rows - 1, round((bottom + 1) / (height / rows)) - 1))
+            if crop_grid
+            else min(rows - 1, int((top + bottom) / 2 / (height / rows)))
         )
-
-    d.ellipse((x - 10, y - 2, x + 13, y + 4), fill="#41643f")
-    d.rectangle((x - 2, y - 31 * scale, x + 3, y), fill=WOOD[0])
-    d.line((x + 2, y - 24 * scale, x + 2, y - 2), fill=WOOD[2])
-    d.line((x, y - 16 * scale, x - 8, y - 26 * scale), fill=WOOD[0], width=2)
-    for bounds in ((-17, -44, 14, -20), (-23, -34, 18, -10), (-13, -51, 11, -23)):
-        box(bounds, "#2e5941")
-    for _ in range(50):
-        xx, yy = r.randint(-17, 12), r.randint(-43, -15)
-        if ((xx / 20) ** 2 + ((yy + 29) / 22) ** 2) < 1:
-            box(
-                (xx, yy, xx + r.randint(3, 8), yy + r.randint(2, 5)),
-                r.choice(("#3f7448", "#548a4d", "#76a454")),
-            )
-    for _ in range(9):
-        xx, yy = r.randint(-13, 8), r.randint(-42, -21)
-        d.line((x + xx, y + yy, x + xx + 2, y + yy), fill="#a3bb66")
-
-
-def fence(d, x1, x2, y):
-    for yy in (y - 9, y - 4):
-        d.rectangle((x1, yy, x2, yy + 2), fill=WOOD[0])
-        d.line((x1, yy, x2, yy), fill=WOOD[2])
-    for x in range(x1, x2 + 1, 13):
-        d.rectangle((x, y - 12, x + 3, y + 2), fill=WOOD[0])
-        d.rectangle((x, y - 12, x + 1, y), fill=WOOD[3])
-        d.point((x + 2, y - 8), fill=INK)
+        key = row, column
+        if crop_grid:
+            found.setdefault(key, []).extend(cluster)
+        elif key not in found or len(found[key]) < count:
+            found[key] = cluster
+    expected = 20 if crop_grid else 24
+    if len(found) != expected:
+        raise ValueError(f"Expected {expected} complete sprites, found {len(found)}")
+    sprites = {}
+    for key, cluster in found.items():
+        mask = Image.new("L", image.size)
+        ImageDraw.Draw(mask).point(cluster, fill=255)
+        sprite = image.copy()
+        sprite.putalpha(mask)
+        sprites[key] = sprite.crop(mask.getbbox())
+    return sprites
 
 
-def building(d, x, y, w, h, roof, kind="barn"):
-    d.ellipse((x - 5, y + h - 2, x + w + 8, y + h + 7), fill="#3e623f")
-    d.rectangle((x, y, x + w, y + h), fill=WOOD[0], outline=INK)
-    for xx in range(x + 1, x + w, 5):
-        d.rectangle((xx, y + 1, xx + 3, y + h - 1), fill=WOOD[1 if kind != "barn" else 0])
-        d.line((xx + 1, y + 4, xx + 1, y + h - 3), fill=WOOD[2 if kind != "barn" else 1])
-    d.rectangle((x - 1, y + h - 3, x + w + 2, y + h), fill="#9a9e85")
-    for xx in range(x, x + w, 7):
-        d.line((xx, y + h - 2, xx + 4, y + h - 2), fill="#c4bea1")
-    d.polygon(
-        ((x - 5, y), (x + w // 2, y - 23), (x + w + 6, y), (x + w + 3, y + 5), (x - 5, y + 5)), fill=INK
-    )
-    d.polygon(((x - 4, y - 1), (x + w // 2, y - 21), (x + w + 3, y - 1)), fill=roof[0])
-    for yy in range(y - 18, y, 4):
-        lo = x + int((y - yy) * w / 46)
-        hi = x + w - int((y - yy) * w / 46)
-        if hi >= lo:
-            d.line((lo, yy, hi, yy), fill=roof[1])
-            for xx in range(lo + 3, hi, 8):
-                d.line((xx, yy, xx - 1, yy + 2), fill=roof[2])
-    d.line((x - 4, y, x + w // 2, y - 21), fill=roof[2], width=2)
-    d.rectangle((x - 5, y + 1, x + w + 5, y + 4), fill=WOOD[0])
-    d.line((x - 4, y + 1, x + w + 4, y + 1), fill=WOOD[3])
-    door = x + w // 2 - 9
-    d.rectangle((door, y + 9, door + 18, y + h - 3), fill=INK)
-    d.rectangle((door + 2, y + 10, door + 16, y + h - 4), fill="#513e32")
-    d.line((door + 9, y + 10, door + 9, y + h - 4), fill=WOOD[2])
-    d.line((door + 2, y + 12, door + 15, y + h - 6), fill=WOOD[3])
-    d.line((door + 15, y + 12, door + 2, y + h - 6), fill=WOOD[2])
-    for xx in (x + 7, x + w - 15):
-        d.rectangle((xx, y + 10, xx + 8, y + 19), fill=INK)
-        d.rectangle((xx + 1, y + 11, xx + 7, y + 18), fill="#dcae61")
-        d.line((xx + 4, y + 11, xx + 4, y + 18), fill=WOOD[0])
-        d.line((xx + 1, y + 15, xx + 7, y + 15), fill=WOOD[0])
-    if kind == "coop":
-        d.rectangle((x + w + 1, y + 14, x + w + 13, y + 29), fill=WOOD[0])
-        d.line((x + w + 2, y + 15, x + w + 13, y + 26), fill=WOOD[3], width=2)
-        for yy in range(y + 17, y + 30, 4):
-            d.line((x + w + 3, yy, x + w + 10, yy), fill=WOOD[1])
-
-
-def hay(d, x, y):
-    d.rectangle((x, y, x + 14, y + 9), fill="#886b37", outline=WOOD[0])
-    d.rectangle((x + 1, y + 1, x + 13, y + 7), fill="#c6a657")
-    for yy in (y + 2, y + 4, y + 6):
-        d.line((x + 2, yy, x + 12, yy), fill="#e2c777")
-    for xx in (x + 4, x + 10):
-        d.line((xx, y, xx, y + 8), fill="#785d35")
-
-
-def trough(d, x, y):
-    d.polygon(((x, y), (x + 18, y), (x + 15, y + 8), (x + 2, y + 8)), fill=WOOD[0])
-    d.rectangle((x + 2, y + 1, x + 15, y + 3), fill="#648e98")
-    d.line((x + 3, y + 1, x + 13, y + 1), fill="#a3c2bf")
-    d.line((x + 3, y + 5, x + 15, y + 5), fill=WOOD[2])
-
-
-def background(scene, index):
-    r = random.Random(331 + index)
-    im = Image.new("RGB", (256, 144))
-    d = ImageDraw.Draw(im)
-    for y in range(58):
-        d.line((0, y, 255, y), fill=(105 + y // 3, 158 + y // 3, 172 + y // 4))
-    d.ellipse((200, 12, 213, 25), fill="#efdb98")
-    d.polygon(
-        (
-            (0, 52),
-            (32, 21),
-            (54, 43),
-            (88, 15),
-            (121, 42),
-            (154, 24),
-            (188, 43),
-            (232, 23),
-            (256, 44),
-            (256, 70),
-            (0, 70),
-        ),
-        fill="#7c9b98",
-    )
-    d.polygon(
-        (
-            (0, 58),
-            (18, 47),
-            (48, 54),
-            (69, 36),
-            (98, 59),
-            (132, 43),
-            (159, 55),
-            (184, 39),
-            (217, 57),
-            (245, 46),
-            (256, 50),
-            (256, 77),
-            (0, 77),
-        ),
-        fill="#5c8072",
-    )
-    d.rectangle((0, 60, 255, 143), fill=GRASS[1])
-    for _ in range(2800):
-        x, y = r.randrange(256), r.randrange(62, 144)
-        d.line((x, y, x + r.randrange(1, 4), y), fill=r.choice(GRASS))
-    # Winding worn path, with darker margins and individual cobbles.
-    path = (
-        (120, 59),
-        (133, 59),
-        (146, 80),
-        (153, 96),
-        (186, 122),
-        (210, 144),
-        (184, 144),
-        (162, 121),
-        (136, 101),
-        (132, 83),
-    )
-    d.polygon(path, fill="#a99562")
-    for _ in range(180):
-        x, y = r.randrange(116, 214), r.randrange(62, 144)
-        if im.getpixel((x, y)) == (169, 149, 98):
-            d.line((x, y, x + 2, y), fill=r.choice(("#bda773", "#c9b985", "#938256")))
-    for x in range(0, 257, 18):
-        tree(d, x, 65 + (x % 9), r.randrange(9999), small=True)
-    roofs = (
-        ("#a66448", "#bf8052", "#e4af75"),
-        ("#75613d", "#a28a4b", "#d1b96e"),
-        ("#854d48", "#ab6450", "#d18b67"),
-        ("#646e63", "#859087", "#bdc0a1"),
-        ("#65516a", "#887088", "#b6999b"),
-        ("#826048", "#ab8557", "#dcaf70"),
-    )
-    if scene == "fields":
-        building(d, 24, 62, 61, 30, roofs[index], "house")
-        d.rectangle((36, 39, 42, 50), fill=WOOD[1])
-        d.line((35, 39, 43, 39), fill=WOOD[3], width=2)
-        # Decorative orchard and well, never extra crop representatives.
-        for x, y in ((215, 82), (240, 94)):
-            tree(d, x, y, x)
-        d.ellipse((94, 81, 110, 88), fill=INK)
-        d.rectangle((95, 82, 109, 89), fill="#7a8b83")
-        d.ellipse((96, 80, 108, 85), fill="#45656b")
-        d.line((95, 80, 95, 68), fill=WOOD[0], width=2)
-        d.line((109, 80, 109, 68), fill=WOOD[0], width=2)
-        d.polygon(((91, 69), (102, 62), (114, 69)), fill=roofs[index][0])
-    else:
-        building(
-            d, 32 if scene != "kennel" else 25, 66, 75 if scene != "kennel" else 40, 32, roofs[index], scene
-        )
-        if scene == "coop":
-            for x in (137, 159):
-                d.rectangle((x, 70, x + 14, 80), fill=WOOD[0])
-                d.ellipse((x + 2, 74, x + 11, 78), fill="#d3ba70")
-            fence(d, 137, 185, 66)
-            trough(d, 211, 114)
-            d.line((158, 76, 187, 76), fill=WOOD[3], width=2)
-        elif scene == "barn":
-            for x, y in ((115, 83), (120, 73), (132, 83)):
-                hay(d, x, y)
-            trough(d, 211, 105)
-            d.line((157, 64, 157, 82), fill=WOOD[0], width=2)
-            d.line((151, 65, 163, 65), fill="#b6b7a0", width=2)
-        elif scene == "pigsty":
-            d.ellipse((153, 91, 236, 128), fill="#655546")
-            d.ellipse((159, 95, 230, 124), fill="#806450")
-            for _ in range(60):
-                x, y = r.randrange(165, 229), r.randrange(101, 121)
-                d.line((x, y, x + 3, y), fill=r.choice(("#91725b", "#705645")))
-            trough(d, 119, 86)
-        elif scene == "stable":
-            hay(d, 117, 85)
-            hay(d, 125, 76)
-            trough(d, 218, 101)
-            d.rectangle((160, 66, 195, 91), fill=WOOD[0])
-            for xx in (164, 179):
-                d.rectangle((xx, 70, xx + 11, 87), fill="#4a4435")
-            d.polygon(((156, 66), (178, 55), (200, 66)), fill=roofs[index][1])
-        elif scene == "kennel":
-            for x, y in ((98, 74), (155, 79)):
-                building(d, x, y, 30, 18, roofs[index], "doghouse")
-                d.ellipse((x + 11, y + 8, x + 20, y + 17), fill=INK)
-            trough(d, 213, 111)
-            d.ellipse((117, 110, 121, 114), fill="#bb6f59")
-            d.line((117, 112, 121, 112), fill="#e5bd7c")
-    fence(d, 9, 27, 91)
-    fence(d, 114 if scene != "fields" else 119, 201, 89)
-    for x, y in ((10, 111), (245, 135), (10, 63), (253, 71)):
-        tree(d, x, y, x + y + index)
-    for _ in range(34):
-        x, y = r.choice((r.randrange(4, 33), r.randrange(225, 254))), r.randrange(84, 142)
-        d.line((x, y, x, y - 3), fill="#3c6242")
-        d.rectangle((x - 1, y - 4, x + 1, y - 3), fill=r.choice(("#e4c37d", "#c99497", "#abc4b2")))
-    fence(d, 19, 107, 141)
-    fence(d, 219, 255, 141)
-    im.save(OUT / f"{scene}.png")
-
-
-def animal(species, frame):
-    im = Image.new("RGBA", (32, 32))
-    d = ImageDraw.Draw(im)
-    bob = 1 if frame == 1 else 0
-    # Draw on a local translated layer to keep feet and gait consistent.
-    body = Image.new("RGBA", (32, 32))
-    p = ImageDraw.Draw(body)
-    if species in ("chicken", "duck", "peacock"):
-        colors = {
-            "chicken": ("#f3dfb0", "#cba76c"),
-            "duck": ("#ebe5c4", "#afbea1"),
-            "peacock": ("#3e8f90", "#28636c"),
-        }
-        light, dark = colors[species]
-        if species == "peacock":
-            if frame in (2, 3):
-                p.ellipse((1, 2, 23, 23), fill="#275f58", outline=INK)
-                for x, y in ((5, 8), (11, 5), (17, 8), (3, 14), (20, 14)):
-                    p.ellipse((x - 1, y - 1, x + 2, y + 2), fill="#b2a558")
-                    p.point((x, y), fill="#377ea1")
-            else:
-                p.polygon(((4, 23), (1, 10), (8, 14), (10, 6), (13, 23)), fill="#3f8263", outline=INK)
-        p.ellipse((7, 14, 24, 26), fill=dark, outline=INK)
-        p.ellipse((8, 14, 22, 23), fill=light)
-        p.ellipse((10, 18, 18, 23), fill=dark)
-        head = "#397c60" if species == "duck" else light
-        p.ellipse((20, 9, 28, 18), fill=head, outline=INK)
-        p.rectangle((24, 12, 25, 13), fill=INK)
-        p.polygon(((27, 14), (31, 15), (27, 17)), fill="#d9a052")
-        if species == "chicken":
-            p.rectangle((21, 7, 23, 10), fill="#b65349")
-            p.rectangle((24, 8, 26, 10), fill="#d36c50")
-        if species == "peacock":
-            p.line((23, 9, 23, 5), fill="#7bb8ab")
-            p.point((22, 4), fill="#c8c17c")
-        for x in (12, 21):
-            p.line((x, 26, x + (frame % 2), 29), fill="#ca9858")
-            p.line((x - 1, 29, x + 2, 29), fill="#ca9858")
-        p.polygon(((8, 16), (3, 12), (5, 22)), fill=dark)
-    else:
-        coats = {
-            "cow": ("#eee6c9", "#b2b29a"),
-            "goat": ("#c6b28c", "#9b8868"),
-            "sheep": ("#f1e9d1", "#c5c5aa"),
-            "pig": ("#dca08e", "#b67d72"),
-            "horse": ("#aa7652", "#785239"),
-            "mutt": ("#a98a65", "#775e46"),
-            "beagle": ("#e0c29c", "#9a6846"),
-            "collie": ("#ece6d3", "#414c49"),
-            "golden": ("#daba79", "#ac8854"),
-        }
-        light, dark = coats[species]
-        is_dog = species in ("mutt", "beagle", "collie", "golden")
-        top = 16 if is_dog else 13
-        for x in (9, 14, 22, 25):
-            step = (frame % 2) if x in (9, 22) else -(frame % 2)
-            p.rectangle((x + step, 22, x + step + 2, 28), fill=dark, outline=INK)
-            p.line((x + step, 28, x + step + 2, 28), fill=INK)
-        p.ellipse((5, top, 26, 25), fill=dark, outline=INK)
-        p.ellipse((6, top, 25, 22), fill=light)
-        if species == "cow":
-            p.polygon(((9, 14), (13, 15), (15, 19), (10, 22), (8, 19)), fill=INK)
-            p.rectangle((19, 14, 23, 18), fill="#48514a")
-            p.ellipse((13, 23, 20, 26), fill="#c79b88")
-        if species == "sheep":
-            for x, y in ((7, 14), (12, 12), (18, 12), (23, 15), (10, 19), (17, 18)):
-                p.ellipse((x - 3, y - 2, x + 4, y + 4), fill=light, outline="#c1bda1")
-        hy = 10 if species == "horse" else 13 if not is_dog else 15
-        p.polygon(
-            ((21, hy + 1), (24, hy - 3), (29, hy), (30, hy + 8), (25, hy + 10), (21, hy + 7)),
-            fill=dark,
-            outline=INK,
-        )
-        p.rectangle((23, hy + 1, 28, hy + 6), fill=light)
-        p.point((27, hy + 2), fill=INK)
-        p.rectangle((26, hy + 6, 30, hy + 8), fill="#b38f79" if species != "pig" else "#edb6a3")
-        p.point((29, hy + 7), fill=INK)
-        if species in ("cow", "goat"):
-            p.line((22, hy - 1, 20, hy - 5), fill="#dfd6ae", width=2)
-            p.line((27, hy - 1, 28, hy - 5), fill="#dfd6ae", width=2)
-        if species == "pig":
-            p.polygon(((23, hy), (20, hy - 4), (26, hy - 2)), fill="#e4aa99", outline=INK)
-            p.arc((1, 18, 7, 24), 0, 300, fill=dark, width=1)
-        elif species == "horse":
-            p.polygon(((21, hy - 1), (21, hy + 12), (24, hy + 8), (25, hy - 2)), fill=INK)
-            p.line((5, 16, 3, 25 + (frame % 2)), fill=INK, width=2)
-        elif is_dog:
-            p.polygon(((22, hy), (20, hy + 8), (24, hy + 9), (26, hy)), fill=dark)
-            p.line((6, 19, 2, 14 - (frame % 2) * 3), fill=dark, width=2)
-            if species in ("collie", "beagle"):
-                p.polygon(
-                    ((9, top), (20, top), (18, 22), (9, 21)),
-                    fill="#424b45" if species == "collie" else "#65503d",
+def export_animals():
+    sheet = Image.new("RGBA", (CELL * len(SPECIES), CELL * 6))
+    groups = {
+        "birds": ("chicken", "duck", "peacock", "pig"),
+        "livestock": ("cow", "goat", "sheep", "horse"),
+        "dogs": ("mutt", "beagle", "collie", "golden"),
+    }
+    dimensions = {}
+    for name, animals in groups.items():
+        sprites = components(opaque_sprite(Image.open(SOURCE / f"{name}.png")))
+        for row, species in enumerate(animals):
+            frames = [sprites[row, frame] for frame in range(6)]
+            width, height = SIZES[species]
+            scale = min(width / max(f.width for f in frames), height / max(f.height for f in frames))
+            dimensions[species] = []
+            for frame, sprite in enumerate(frames):
+                sprite = sprite.resize(
+                    (round(sprite.width * scale), round(sprite.height * scale)), Image.Resampling.NEAREST
                 )
-            if frame == 3:  # Resting pose; expressive eyes stay distinct.
-                p.line((26, hy + 2, 28, hy + 2), fill=INK)
-        if species == "goat":
-            p.line((27, hy + 9, 26, hy + 12), fill="#e6d7b6", width=2)
-    d.ellipse((4, 27, 29, 30), fill=(35, 57, 40, 75))
-    im.alpha_composite(body, (0, -bob))
-    return im
+                x, y = (CELL - sprite.width) // 2, CELL - 8 - sprite.height
+                sheet.alpha_composite(sprite, (SPECIES.index(species) * CELL + x, frame * CELL + y))
+                dimensions[species].append([x, y, sprite.width, sprite.height])
+    sheet.save(OUT / "animals.png", optimize=True)
+    return dimensions
 
 
-def crops():
-    sheet = Image.new("RGBA", (32 * 5, 32 * 4))
-    colors = ("#dac17b", "#e99a54", "#d4bd59", "#cb615a", "#d88a45")
-    for c in range(5):
+def export_crops():
+    source = opaque_sprite(Image.open(SOURCE / "crop-stages.png"))
+    sprites = components(source, crop_grid=True)
+    sheet = Image.new("RGBA", (CELL * 5, CELL * 4))
+    widths, heights = (66, 66, 66, 72, 78), (55, 46, 68, 44, 51)
+    for row in range(5):
         for stage in range(4):
-            cell = Image.new("RGBA", (32, 32))
-            d = ImageDraw.Draw(cell)
-            d.polygon(((2, 20), (19, 16), (31, 22), (14, 29)), fill="#624734", outline="#3e3e30")
-            for x in range(6, 26, 5):
-                d.line((x, 21, x + 6, 24), fill="#927049")
-            if stage:
-                for x, y in ((10, 22), (18, 20), (23, 24)):
-                    height = 3 if stage == 1 else 8 if stage == 2 else 12
-                    d.line((x, y, x, y - height), fill="#5d8d4c", width=2)
-                    d.line((x, y - 2, x - 3, y - 5), fill="#99af62", width=2)
-                    d.line((x, y - 3, x + 3, y - 6), fill="#6f9d51", width=2)
-                    if stage == 3:
-                        if c == 0:
-                            for dy in (0, 3, 6):
-                                d.line((x - 2, y - height + dy, x + 2, y - height + dy + 1), fill=colors[c])
-                        elif c == 1:
-                            d.polygon(((x - 2, y - 3), (x + 2, y - 3), (x, y + 2)), fill=colors[c])
-                        elif c == 2:
-                            d.ellipse((x - 2, y - 10, x + 2, y - 3), fill=colors[c], outline="#ab984b")
-                        elif c == 3:
-                            d.ellipse((x - 3, y - 4, x + 1, y), fill=colors[c])
-                            d.point((x - 1, y - 2), fill="#f1c28d")
-                        else:
-                            d.ellipse((x - 4, y - 4, x + 3, y + 1), fill=colors[c], outline="#ad643c")
-                            d.line((x, y - 3, x, y), fill="#edb65d")
-            sheet.alpha_composite(cell, (c * 32, stage * 32))
-    sheet.save(OUT / "crops.png")
+            sprite = sprites[row, stage]
+            # Shared scale per species retains growth instead of enlarging sprouts.
+            scale = min(widths[row] / (source.width / 4 - 12), heights[row] / (source.height / 5 - 12))
+            sprite = sprite.resize(
+                (max(1, round(sprite.width * scale)), max(1, round(sprite.height * scale))),
+                Image.Resampling.NEAREST,
+            )
+            sheet.alpha_composite(
+                sprite, (row * CELL + (CELL - sprite.width) // 2, stage * CELL + CELL - 8 - sprite.height)
+            )
+    sheet.save(OUT / "crops.png", optimize=True)
 
 
 def main():
-    OUT.mkdir(exist_ok=True)
-    for i, scene in enumerate(SCENES):
-        background(scene, i)
-    sheet = Image.new("RGBA", (32 * len(SPECIES), 128))
-    for i, species in enumerate(SPECIES):
-        for frame in range(4):
-            sheet.alpha_composite(animal(species, frame), (i * 32, frame * 32))
-    sheet.save(OUT / "animals.png")
-    crops()
-    icon = Image.new("RGBA", (32, 32), INK)
-    d = ImageDraw.Draw(icon)
-    d.rectangle((2, 2, 29, 29), fill="#bd9e64")
-    d.rectangle((4, 4, 27, 27), fill="#547b4a")
-    d.rectangle((8, 15, 24, 26), fill=WOOD[2], outline=INK)
-    d.polygon(((5, 15), (16, 6), (27, 15)), fill="#b96f50", outline=INK)
-    d.line((8, 14, 16, 8), fill="#e6b77d")
-    d.rectangle((14, 20, 18, 26), fill=WOOD[0])
-    d.rectangle((10, 18, 12, 20), fill="#f1d790")
-    icon.save(OUT / "icon.png")
-    icon.resize((256, 256), Image.Resampling.NEAREST).save(
-        OUT / "icon.ico", sizes=[(16, 16), (32, 32), (48, 48), (256, 256)]
+    scenes = {}
+    for scene, features in FEATURES.items():
+        background = Image.open(SOURCE / f"{scene}.png").convert("RGB").resize(SIZE, Image.Resampling.NEAREST)
+        background.save(OUT / f"{scene}.png", optimize=True)
+        mask = Image.new("L", SIZE)
+        draw = ImageDraw.Draw(mask)
+        for polygon in FOREGROUND[scene]:
+            draw.polygon(polygon, fill=255)
+        foreground = background.convert("RGBA")
+        foreground.putalpha(mask)
+        foreground.save(OUT / f"{scene}-foreground.png", optimize=True)
+        scenes[scene] = {
+            "interior": scene != "fields",
+            "features": features,
+            "windows": WINDOWS.get(scene, []),
+            "lamps": LAMPS[scene],
+            "foreground_depth": 264,
+            "walkable": [92, 151, 420, 250],
+        }
+    dimensions = export_animals()
+    export_crops()
+    manifest = {
+        "version": 2,
+        "resolution": list(SIZE),
+        "cell": CELL,
+        "animal_frames": 6,
+        "species": list(SPECIES),
+        "sprite_bounds": dimensions,
+        "animations": {
+            "idle": [0, 1, 0, 0],
+            "walk": [2, 0, 3, 0],
+            "feed": [0, 4, 4, 0],
+            "rest": [0, 5, 5, 0],
+            "display": [0, 1, 1, 0],
+        },
+        "scenes": scenes,
+    }
+    (OUT / "manifest.json").write_text(
+        json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
     )
-    print("Original backgrounds, crop stages, 48 animal frames and icon generated.")
+    print("Exported 6 backgrounds, 6 foregrounds, 72 animal frames and 20 crop stages at 512×288.")
 
 
 if __name__ == "__main__":

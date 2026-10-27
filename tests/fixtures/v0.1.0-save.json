@@ -1,0 +1,178 @@
+{
+  "version": 1,
+  "coins": 8273,
+  "plots": [
+    {
+      "crop": "wheat",
+      "planted_at": 1800302400.0
+    },
+    {
+      "crop": "carrot",
+      "planted_at": 1800302400.0
+    },
+    {
+      "crop": "corn",
+      "planted_at": 1800302400.0
+    },
+    {
+      "crop": "strawberry",
+      "planted_at": 1800302400.0
+    },
+    {
+      "crop": "pumpkin",
+      "planted_at": 1800302400.0
+    },
+    {
+      "crop": "wheat",
+      "planted_at": 1800302400.0
+    },
+    {
+      "crop": "carrot",
+      "planted_at": 1800302400.0
+    },
+    {
+      "crop": "corn",
+      "planted_at": 1800302400.0
+    },
+    {
+      "crop": "strawberry",
+      "planted_at": 1800302400.0
+    },
+    {
+      "crop": "pumpkin",
+      "planted_at": 1800302400.0
+    },
+    {
+      "crop": "wheat",
+      "planted_at": 1800302400.0
+    },
+    {
+      "crop": "carrot",
+      "planted_at": 1800302400.0
+    }
+  ],
+  "buildings": [
+    "coop",
+    "barn",
+    "pigsty",
+    "stable",
+    "kennel"
+  ],
+  "animals": [
+    {
+      "species": "chicken",
+      "count": 1,
+      "paid_until": 1800331200.0
+    },
+    {
+      "species": "duck",
+      "count": 1,
+      "paid_until": 1800329400.0
+    },
+    {
+      "species": "peacock",
+      "count": 1,
+      "paid_until": 1800331200.0
+    },
+    {
+      "species": "cow",
+      "count": 1,
+      "paid_until": 1800331200.0
+    },
+    {
+      "species": "goat",
+      "count": 1,
+      "paid_until": 1800331200.0
+    },
+    {
+      "species": "sheep",
+      "count": 1,
+      "paid_until": 1800331200.0
+    },
+    {
+      "species": "pig",
+      "count": 1,
+      "paid_until": 1800331200.0
+    },
+    {
+      "species": "horse",
+      "count": 1,
+      "paid_until": 1800331200.0
+    },
+    {
+      "species": "mutt",
+      "count": 1,
+      "paid_until": 1800273600.0
+    },
+    {
+      "species": "beagle",
+      "count": 1,
+      "paid_until": 1800273600.0
+    },
+    {
+      "species": "collie",
+      "count": 1,
+      "paid_until": 1800273600.0
+    },
+    {
+      "species": "golden",
+      "count": 1,
+      "paid_until": 1800273600.0
+    },
+    {
+      "species": "chicken",
+      "count": 1,
+      "paid_until": 1800331200.0
+    },
+    {
+      "species": "chicken",
+      "count": 1,
+      "paid_until": 1800331200.0
+    },
+    {
+      "species": "chicken",
+      "count": 1,
+      "paid_until": 1800331200.0
+    },
+    {
+      "species": "chicken",
+      "count": 1,
+      "paid_until": 1800331200.0
+    },
+    {
+      "species": "chicken",
+      "count": 1,
+      "paid_until": 1800331200.0
+    },
+    {
+      "species": "chicken",
+      "count": 1,
+      "paid_until": 1800331200.0
+    },
+    {
+      "species": "chicken",
+      "count": 1,
+      "paid_until": 1800331200.0
+    },
+    {
+      "species": "chicken",
+      "count": 1,
+      "paid_until": 1800331200.0
+    }
+  ],
+  "unlocked": [
+    "wheat",
+    "carrot",
+    "corn",
+    "strawberry",
+    "pumpkin"
+  ],
+  "earned": 27383,
+  "animal_earned": 12588,
+  "harvests": 48,
+  "last_accounted": 1800331200.0,
+  "preferences": {
+    "on_top": false,
+    "scene": "fields"
+  }
+}

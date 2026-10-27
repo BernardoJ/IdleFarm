@@ -1,36 +1,32 @@
-"""Bounded rendering with original atlases and local-time lighting."""
+"""Layered 512×288 scenes, bounded sprites and independent local-time lighting."""
 
-from datetime import datetime
+import json
 import math
 import time
-from PySide6.QtCore import QPoint, QRect, Qt, QTimer, Signal
+from PySide6.QtCore import QPoint, QRect, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QImage, QPainter
-from PySide6.QtWidgets import QWidget
+from PySide6.QtWidgets import QSizePolicy, QWidget
 
-from config.data import ANIMALS, CROPS, ROOT, SCENES
+from config.data import ANIMALS, BUILDINGS, CROPS, ROOT, SCENES
+from visual.animation import pose
+from visual.lighting import Lighting, weights
 
-POSITIONS = ((53, 105), (91, 121), (132, 106), (173, 122), (211, 105))
+WIDTH, HEIGHT, CELL = 512, 288, 96
+POSITIONS = ((135, 167), (180, 221), (268, 167), (341, 221), (400, 167))
 ANIMAL_KEYS = tuple(ANIMALS)
 CROP_KEYS = tuple(CROPS)
 
 
 def lighting(hour):
-    stops = (
-        (0, (17, 29, 60, 145)),
-        (5, (17, 29, 60, 145)),
-        (6.5, (142, 100, 137, 55)),
-        (8, (235, 244, 194, 0)),
-        (16, (235, 244, 194, 0)),
-        (18, (221, 132, 68, 65)),
-        (20, (17, 29, 60, 145)),
-        (24, (17, 29, 60, 145)),
-    )
-    for (lo, a), (hi, b) in zip(stops, stops[1:]):
-        if lo <= hour <= hi:
-            t = (hour - lo) / (hi - lo)
-            t = t * t * (3 - 2 * t)
-            return QColor(*(round(a[i] * (1 - t) + b[i] * t) for i in range(4)))
-    return QColor(17, 29, 60, 145)
+    """Continuous representative ambient tint, also exposed for preview tools."""
+    first, second, amount = weights(hour)
+    colors = {
+        "night": (27, 42, 78, 91),
+        "dawn": (142, 100, 137, 45),
+        "day": (235, 244, 194, 0),
+        "dusk": (221, 132, 68, 50),
+    }
+    return QColor(*(round(a * (1 - amount) + b * amount) for a, b in zip(colors[first], colors[second])))
 
 
 def time_label(hour):
@@ -47,88 +43,138 @@ def time_label(hour):
 
 class Renderer:
     def __init__(self):
+        self.manifest = json.loads((ROOT / "assets/manifest.json").read_text(encoding="utf-8"))
+        if self.manifest["resolution"] != [WIDTH, HEIGHT]:
+            raise RuntimeError("Resolução dos recursos incompatível.")
         self.backgrounds = {key: self._load(key + ".png") for key in SCENES}
+        self.foregrounds = {key: self._load(key + "-foreground.png") for key in SCENES}
         self.animals = self._load("animals.png")
         self.crops = self._load("crops.png")
+        self.light = Lighting(self.backgrounds, self.foregrounds, self.manifest["scenes"])
+        # Fixed-size atlas slices, reused regardless of the number of owned animals.
+        self.animal_frames = {
+            (key, frame): self.animals.copy(index * CELL, frame * CELL, CELL, CELL)
+            for index, key in enumerate(ANIMAL_KEYS)
+            for frame in range(6)
+        }
+        self.crop_frames = {
+            (key, stage): self.crops.copy(index * CELL, stage * CELL, CELL, CELL)
+            for index, key in enumerate(CROP_KEYS)
+            for stage in range(4)
+        }
 
     @staticmethod
     def _load(name):
         image = QImage(str(ROOT / "assets" / name))
         if image.isNull():
             raise RuntimeError(f"Recurso gráfico ausente: {name}")
-        return image
+        return image.convertToFormat(QImage.Format_ARGB32_Premultiplied)
 
     def icon(self, key, frame=0):
+        if key in BUILDINGS or key == "fields":
+            return self.backgrounds[key].scaled(80, 45, Qt.KeepAspectRatio, Qt.FastTransformation)
         if key in CROPS:
-            return self.crops.copy(CROP_KEYS.index(key) * 32, 3 * 32, 32, 32)
-        return self.animals.copy(ANIMAL_KEYS.index(key) * 32, frame * 32, 32, 32)
+            return self.crop_frames[key, 3].copy(9, 16, 78, 73)
+        x, y, width, height = self.manifest["sprite_bounds"][key][frame]
+        return self.animal_frames[key, frame].copy(x, y, width, height)
+
+    def entities(self, farm, scene, phase):
+        return sorted(
+            ((key, pose(scene, key, index, phase)) for index, key in enumerate(farm.representatives(scene))),
+            key=lambda item: item[1].y,
+        )
 
     def render(self, farm, scene, moment=None, phase=0, selected=0):
-        moment = moment or datetime.now()
-        hour = moment.hour + moment.minute / 60 + moment.second / 3600
-        image = self.backgrounds[scene].copy()
+        light = self.light.at(scene, moment)
+        image = light.background
         painter = QPainter(image)
         painter.setRenderHint(QPainter.Antialiasing, False)
         painter.setRenderHint(QPainter.SmoothPixmapTransform, False)
-        # Low-cost ambient movement, independent from the simulation clock.
-        for i in range(3):
-            x = int((phase * (1 + i * 0.25) + i * 79) % 302) - 35
-            y = 10 + i * 9
-            for dx, dy, w, h in ((0, 5, 23, 3), (5, 1, 12, 6), (12, 3, 18, 5)):
-                painter.fillRect(x + dx, y + dy, w, h, QColor("#d8d7b4"))
-        reps = farm.representatives(scene)
-        for index, identifier in enumerate(reps):
-            x, y = POSITIONS[index]
-            if scene == "fields":
-                crop = farm.state["plots"][identifier]["crop"]
+        self.light.beams(painter, scene, light, phase)
+        if scene == "fields":
+            entries = list(zip(farm.representatives(scene), POSITIONS))
+            for identifier, (x, y) in sorted(entries, key=lambda item: item[1][1]):
+                key = farm.state["plots"][identifier]["crop"]
                 stage = farm.stage(identifier)
-                source = QRect(CROP_KEYS.index(crop) * 32, stage * 32, 32, 32)
-                painter.drawImage(QPoint(x - 16, y - 24), self.crops, source)
+                sway = round(math.sin(phase * 0.8 + x)) if stage > 1 else 0
+                sprite = self.light.actor(self.crop_frames[key, stage], scene, x, y, light)
+                painter.drawImage(QPoint(x - CELL // 2 + sway, y - CELL + 8), sprite)
                 if identifier == selected:
-                    painter.setPen(QColor("#e9ce8a"))
-                    painter.drawRect(x - 17, y - 12, 33, 18)
-                if stage == 3 and int(phase * 2 + index) % 3 == 0:
-                    painter.fillRect(x + 9, y - 24, 1, 5, QColor("#f7e7a2"))
-                    painter.fillRect(x + 7, y - 22, 5, 1, QColor("#f7e7a2"))
-            else:
-                frame = int(phase * 2 + index) % 4
-                # Small bounded stroll, with occasional still/resting frames.
-                dx = round(math.sin(phase * 0.45 + index * 2) * 4)
-                source = QRect(ANIMAL_KEYS.index(identifier) * 32, frame * 32, 32, 32)
-                painter.drawImage(QPoint(x - 16 + dx, y - 27), self.animals, source)
-        tint = lighting(hour)
-        painter.fillRect(image.rect(), tint)
-        night = max(0, min(1, (tint.alpha() - 60) / 85))
-        if night:
-            # Stepped warm window light; no blur or filtered pixels.
-            for x, y in ((40, 78), (94, 80)):
-                for size, alpha in ((13, 20), (8, 40), (4, 100)):
-                    painter.fillRect(
-                        x - size // 2, y - size // 2, size, size, QColor(245, 185, 91, round(alpha * night))
-                    )
-            for i in range(10):
-                if math.sin(phase * 1.7 + i) > 0:
-                    x = int(23 + i * 23 + math.sin(phase + i) * 3)
-                    y = int(89 + (i * 17) % 43 + math.cos(phase * 0.8 + i) * 2)
-                    painter.fillRect(x, y, 1, 1, QColor("#e9d494"))
-            for i in range(16):
-                painter.fillRect(
-                    12 + (i * 47) % 237, 3 + (i * 11) % 25, 1, 1, QColor(202, 214, 208, round(100 * night))
-                )
+                    painter.setPen(QColor("#ffdf91"))
+                    # Corner marks keep the plants visible and identify the selected bed.
+                    for side in (-1, 1):
+                        xx = x + side * 37
+                        painter.drawLine(xx, y + 5, xx - side * 7, y + 5)
+                        painter.drawLine(xx, y + 5, xx, y - 2)
+                if stage == 3 and int(phase * 2 + identifier) % 5 == 0:
+                    painter.setPen(QColor("#fff2bd"))
+                    painter.drawLine(x + 22, y - 51, x + 22, y - 45)
+                    painter.drawLine(x + 19, y - 48, x + 25, y - 48)
         else:
-            painter.setPen(QColor("#4c655d"))
-            for i in range(3):
-                x = int((phase * 9 + i * 12) % 285) - 15
-                y = 16 + i * 3
-                dy = int(phase * 4) % 2
-                painter.drawLine(x - 2, y - dy, x, y + 1)
-                painter.drawLine(x, y + 1, x + 2, y - dy)
-        for i in range(4):
-            x = int((phase * 5 + i * 67) % 256)
-            y = int(61 + (phase * 3 + i * 19) % 75)
-            painter.fillRect(x, y, 2, 1, QColor("#b2b46a"))
+            for key, state in self.entities(farm, scene, phase):
+                x, y = state.x, state.y
+                bounds = self.manifest["sprite_bounds"][key][state.frame]
+                shadow_width = round(bounds[2] * 0.8)
+                painter.setPen(Qt.NoPen)
+                painter.setBrush(QColor(32, 24, 23, 90))
+                painter.drawEllipse(x - shadow_width // 2, y - 3, shadow_width, 7)
+                sprite = self.animal_frames[key, state.frame]
+                if state.mirrored:
+                    sprite = sprite.flipped(Qt.Horizontal)
+                sprite = self.light.actor(sprite, scene, x, y, light)
+                painter.drawImage(QPoint(x - CELL // 2, y - CELL + 8), sprite)
+                if scene == "pigsty" and 155 < x < 350 and state.behaviour in ("walk", "rest"):
+                    painter.setPen(QColor(190, 151, 105, 100))
+                    radius = 3 + int((phase * 3) % 8)
+                    painter.setBrush(Qt.NoBrush)
+                    painter.drawEllipse(x - radius, y - 2, radius * 2, 5)
+        # Original foreground alpha owns fence/plant occlusion, after feet-sorted actors.
+        painter.drawImage(0, 0, light.foreground)
+        self.ambient(painter, scene, phase, light)
+        self.light.lamps(painter, scene, light, phase)
         painter.end()
         return image
+
+    def ambient(self, painter, scene, phase, light):
+        if scene == "fields":
+            for index in range(6):
+                x = round(40 + index * 83 + math.sin(phase * 0.5 + index) * 8)
+                y = round(106 + (index * 37) % 142 + math.cos(phase * 0.7 + index) * 6)
+                if light.night > 0.6:
+                    if math.sin(phase + index) > 0:
+                        painter.fillRect(x, y, 1, 2, QColor("#f5d894"))
+                else:
+                    wing = 2 if int(phase * 4 + index) % 2 else 1
+                    painter.fillRect(x - wing, y, wing * 2 + 1, 2, QColor("#ead6a0"))
+                    painter.fillRect(x, y, 1, 3, QColor("#69593f"))
+        else:
+            # Tiny water glints and drifting straw/dust stay within each room.
+            for index in range(4):
+                x = 104 + (index * 73) % 290 + round(math.sin(phase * 0.3 + index) * 2)
+                y = 155 + int((phase * 1.4 + index * 29) % 85)
+                painter.fillRect(x, y, 1 + index % 2, 1, QColor(230, 202, 148, 40))
+            if scene == "pigsty":
+                painter.setPen(QColor(191, 177, 144, 95))
+                painter.setBrush(Qt.NoBrush)
+                radius = 5 + int(phase * 2) % 15
+                painter.drawEllipse(265 - radius, 192, radius * 2, radius // 3 + 2)
+            water = {
+                "coop": (459, 129),
+                "barn": (380, 65),
+                "pigsty": (311, 82),
+                "stable": (475, 163),
+                "kennel": (432, 81),
+            }
+            x, y = water[scene]
+            for index in range(3):
+                shift = round(math.sin(phase * 1.1 + index) * 3)
+                painter.fillRect(
+                    x - 5 + shift,
+                    y + index * 2,
+                    5 - index,
+                    1,
+                    QColor(182, 218, 216, round(30 + light.daylight * 50)),
+                )
 
 
 class SceneWidget(QWidget):
@@ -137,43 +183,48 @@ class SceneWidget(QWidget):
     def __init__(self, farm, renderer, parent=None):
         super().__init__(parent)
         self.farm, self.renderer = farm, renderer
-        self.scene = farm.state["preferences"]["scene"]
+        self.scene = "fields"
         self.selected = 0
         self.started = time.monotonic()
         self.qa_moment = None
-        self.setMinimumHeight(288)
-        self.setMaximumHeight(288)
+        self.qa_phase = None
+        self.setMinimumHeight(HEIGHT)
+        self.setMaximumHeight(HEIGHT * 2)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.setToolTip("Arraste o cenário para mover a janela. Clique numa plantação para selecioná-la.")
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.update)
-        self.timer.start(83)
+        self.timer.start(100)
         self.drag_origin = None
         self.target = QRect()
 
+    def sizeHint(self):
+        return QSize(WIDTH, HEIGHT)
+
     def paintEvent(self, event):
-        image = self.renderer.render(
-            self.farm, self.scene, self.qa_moment, time.monotonic() - self.started, self.selected
-        )
-        p = QPainter(self)
-        p.fillRect(self.rect(), QColor("#22372e"))
-        # Integer scale in PHYSICAL pixels, including fractional Windows DPI.
+        phase = self.qa_phase if self.qa_phase is not None else time.monotonic() - self.started
+        image = self.renderer.render(self.farm, self.scene, self.qa_moment, phase, self.selected)
+        painter = QPainter(self)
+        painter.fillRect(self.rect(), QColor("#242b25"))
         dpr = self.devicePixelRatioF()
-        scale = max(1, min(int(self.width() * dpr / 256), int(self.height() * dpr / 144)))
-        w, h = round(256 * scale / dpr), round(144 * scale / dpr)
-        self.target = QRect((self.width() - w) // 2, (self.height() - h) // 2, w, h)
-        p.setRenderHint(QPainter.SmoothPixmapTransform, False)
-        p.drawImage(self.target, image)
-        p.end()
+        scale = max(1, min(int(self.width() * dpr / WIDTH), int(self.height() * dpr / HEIGHT)))
+        width, height = round(WIDTH * scale / dpr), round(HEIGHT * scale / dpr)
+        self.target = QRect((self.width() - width) // 2, (self.height() - height) // 2, width, height)
+        painter.setRenderHint(QPainter.SmoothPixmapTransform, False)
+        painter.drawImage(self.target, image)
+        painter.setPen(QColor("#b8955d"))
+        painter.drawRect(self.target.adjusted(-1, -1, 0, 0))
+        painter.end()
 
     def mousePressEvent(self, event):
         if event.button() != Qt.LeftButton:
             return
         self.drag_origin = event.globalPosition().toPoint() - self.window().frameGeometry().topLeft()
         if self.scene == "fields" and self.target.contains(event.position().toPoint()):
-            x = (event.position().x() - self.target.x()) * 256 / self.target.width()
-            y = (event.position().y() - self.target.y()) * 144 / self.target.height()
+            x = (event.position().x() - self.target.x()) * WIDTH / self.target.width()
+            y = (event.position().y() - self.target.y()) * HEIGHT / self.target.height()
             for identifier, (px, py) in zip(self.farm.representatives("fields"), POSITIONS):
-                if abs(x - px) < 18 and abs(y - py) < 17:
+                if abs(x - px) < 39 and py - 70 < y < py + 12:
                     self.plot_selected.emit(identifier)
                     self.drag_origin = None
                     break

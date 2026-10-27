@@ -5,7 +5,10 @@ import os
 root = Path(SPECPATH)
 a = Analysis(
     [str(root / 'main.py')], pathex=[str(root)], binaries=[],
-    datas=[(str(root / 'assets'), 'assets'), (str(root / 'config' / 'catalog.json'), 'config')],
+    # Ship only final runtime assets, keeping high-resolution authoring sources out.
+    datas=[(str(path), 'assets') for path in (root / 'assets').iterdir()
+           if path.is_file() and path.suffix in ('.png', '.ico', '.json')]
+          + [(str(root / 'config' / 'catalog.json'), 'config')],
     hiddenimports=[], hookspath=[], hooksconfig={}, runtime_hooks=[],
     excludes=['tkinter', 'PySide6.QtWebEngineCore', 'PySide6.QtWebEngineWidgets', 'pytest', 'PIL'],
     noarchive=False, optimize=1,
@@ -24,4 +27,5 @@ exe = EXE(
     console=os.environ.get('IDLEFARM_CONSOLE') == '1',
     disable_windowed_traceback=False, argv_emulation=False,
     target_arch=None, codesign_identity=None, entitlements_file=None,
+    version=str(root / 'tools' / 'windows-version.txt') if os.name == 'nt' else None,
 )

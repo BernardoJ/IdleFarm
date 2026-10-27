@@ -1,63 +1,74 @@
-# Validação da primeira versão
+# Validação da reformulação 0.2.0
 
-## Execução local
+## Código e compatibilidade
 
-Python 3.12.14, PySide6 6.10.0, Linux x64, plataforma Qt offscreen.
+A base v0.1.0 publicada foi examinada antes da reformulação. O catálogo de
+preços, tempos, rendimentos e desbloqueios, assim como o código econômico e o
+esquema v1 dos saves, foram preservados. A fixture `tests/fixtures/v0.1.0-save.json`
+foi produzida executando o código da tag v0.1.0 em um diretório isolado, com
+jogatina legítima. A versão nova restaura seu estado exatamente, incluindo
+12 terrenos, 20 animais, culturas, edifícios e saldo; também verifica pagamentos
+offline sem duplicação.
 
-- **59 testes passaram**, incluindo ações reais em controles Qt e inicialização
-  da aplicação em outro diretório de trabalho.
-- A simulação partiu de **50 moedas e dois terrenos**, sem injetar dinheiro,
-  percorreu **92 horas virtuais**, plantou e colheu todas as cinco culturas,
-  adquiriu as cinco construções e todas as doze espécies/raças.
-- Foram comprados **12 terrenos e 20 animais**, incluindo nove galinhas. O teste
-  verificou que o limite de cinco sprites não reduz a renda nem omite espécies.
-- Testes individuais verificaram os pagamentos das oito espécies produtivas e
-  a ausência de pagamento das quatro raças de cachorro.
-- Períodos offline testados: 0, 60, 1.799, 1.800, 3.600, 14.400, 28.800 e
-  86.400 segundos. Testados também ciclos parciais, reabertura repetida,
-  colheita duplicada, saldo insuficiente e relógio retrocedendo.
-- Persistência: restauração exata, transação revertida em falha de gravação,
-  arquivo parcialmente gravado, recuperação de backup, dois arquivos inválidos,
-  esquema inválido e proteção do save real durante QA.
-- **12 capturas** cobrem os seis ambientes durante dia e noite. O validador
-  verificou limites geométricos de textos e botões, sem controles cortados.
-- Capturas adicionais executadas em DPI **100%, 125%, 150% e 200%**; sem
-  cortes de controles detectados. Texto nativo, cena com escala inteira em
-  pixels físicos e nearest-neighbor.
+A suíte local passou com **76 testes**. As capturas passaram nas escalas
+100%, 125%, 150% e 200%, sem controles cortados. A suíte cobre plantio e colheita das cinco culturas, todas as instalações e
+espécies, navegação real pelo menu, uma página por vez, reinício nas plantações,
+seleção de canteiros com a nova resolução, poses completas, portes, limites de
+movimentação, ordem vertical, oclusão real de pixels, janelas, lanternas,
+independência da renderização em relação ao estado econômico, recuperação de
+saves e inicialização fora da pasta do projeto.
 
-O relatório estruturado da captura está em
-[`screenshots/validation.json`](screenshots/validation.json). A execução de
-testes fica separada do relatório visual: uma captura não substitui os testes.
+## Jogatina e imagens inspecionadas
 
-## Falha encontrada e corrigida
+A simulação parte de 50 moedas e dois terrenos. Em 92 horas virtuais, planta e
+colhe todas as culturas, constrói as cinco instalações e compra as doze
+espécies/raças. Termina com 12 terrenos e 20 animais, incluindo nove galinhas.
+O galinheiro mostra galinha, pato e pavão entre no máximo cinco representantes.
 
-A primeira bateria encontrou cinco falhas no limiar visual de broto: o cálculo
-`1 - restante / duração` arredondava 10% para um valor ligeiramente inferior.
-A implementação agora compara diretamente o tempo decorrido com a duração,
-preservando o limite exato sem afrouxar os testes. A bateria completa passou
-depois da correção.
+Foram geradas e inspecionadas as cenas dos seis ambientes durante dia e noite,
+as respectivas janelas completas e os novos atlases. Os cinco interiores têm
+paredes, piso, janelas e decoração própria. A lama aparece no centro do
+chiqueiro; camas e brinquedos diferenciam o canil; selas e baias identificam o
+estábulo. A vaca e o cavalo têm portes maiores. Lanternas mantêm fontes quentes
+locais à noite, enquanto os vidros escurecem.
 
-A inspeção das capturas também identificou quebra desnecessária do subtítulo
-na barra superior. O indicador foi reduzido a período do dia e hora, mantendo
-texto e controles legíveis.
+A primeira inspeção encontrou pequenos fragmentos de silhuetas adjacentes e
+extremidades de plantas atravessando divisões dos atlases gerados. A exportação
+passou a isolar componentes conexos, agrupar plantas pela linha de solo e
+normalizar as escalas sem cortar orelhas ou pernas. As capturas finais foram
+regeneradas após a correção. Um teste com uma silhueta sólida comprova que o
+primeiro plano realmente cobre os pixels do animal.
 
-## Windows e publicação
+As [galerias e capturas](screenshots/) são imagens reais do renderizador e da
+interface. `screenshots/animations.gif` demonstra os quadros de animação;
+`screenshots/validation.json` registra os resultados geométricos e a simulação.
+A validação considera botões comuns e o botão do menu, além de rótulos visíveis.
 
-O workflow `.github/workflows/windows-release.yml` executa os testes, capturas,
-PyInstaller e smoke test do **próprio executável Windows x64**. O smoke test
-valida o cabeçalho PE x64, inicia o binário duas vezes fora do checkout, usa
-save temporário e exige carregamento dos seis ambientes. A segunda abertura
-confirma a persistência do perfil empacotado. O SHA-256 é calculado após isso.
+## Desempenho e empacotamento
 
-Este relatório local não declara aprovado um workflow remoto ainda não observado.
-Consulte Actions, os artefatos e a Release para o resultado efetivo no Windows.
+`python tools/benchmark.py` aquece os caches e mede 1.200 renderizações,
+amostrando um dia visual de 24 horas com todas as espécies. Isso é um teste
+acelerado; não representa 24 horas de execução real. O relatório registra
+média, percentil 95, memória residente antes/depois, caches fixos e confirmação
+de que a economia não mudou. Na medição local final: média de 0,535 ms por
+quadro e crescimento residente de 798.720 bytes, sem aumento dos caches.
+O resultado está em `screenshots/performance-linux.json`.
 
-## Limites conhecidos
+As artes-fonte não entram no pacote. O executável usa apenas PNGs finais e
+metadados locais. Pillow continua restrito à preparação de arte e QA.
 
-- Saves não são criptografados; edição externa pode alterar progresso. A proteção
-  cobre duplicação acidental, recuo do relógio e falhas de escrita.
-- O jogo acompanha o horário civil local para iluminação, sem geolocalização.
-- A versão não inclui som, conquistas, comercialização de animais ou assinatura
-  digital do executável; esses itens não são necessários à economia da v0.1.
-- Capturas offscreen verificam layout/renderização. O comportamento do desktop
-  e o binário Windows recebem validação separada no executor Windows.
+O workflow Windows compila com PyInstaller, verifica PE x64 e inicia o próprio
+`IdleFarm.exe` duas vezes em outra pasta, com save temporário. Confirma versão,
+resolução 512×288, atlas com 72 quadros, cinco interiores, carregamento das seis
+áreas e restauração do perfil. Somente depois calcula o SHA-256 e publica a
+Release. Evidências remotas são os logs do workflow e os arquivos
+`executable.json`, `performance.json` e `SHA256SUMS.txt` anexados à Release.
+
+## Limites
+
+As animações usam poses discretas e trajetos curtos, com cinco representantes;
+não há navegação livre por todo o mapa. O teste de desempenho mede amostras
+aceleradas, não uma sessão de 24 horas reais. A escala inteira pode criar
+margens ao redor da cena em certos tamanhos/DPI. O executável continua sem
+assinatura digital. Saves seguem sem criptografia. Não foram adicionados som,
+conquistas ou alterações econômicas.

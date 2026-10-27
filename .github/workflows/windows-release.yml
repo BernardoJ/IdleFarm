@@ -47,6 +47,10 @@ jobs:
           Remove-Item Env:QT_SCALE_FACTOR
       - name: Build real Windows executable
         run: python -m PyInstaller --noconfirm --clean IdleFarm.spec
+      - name: Measure bounded rendering across a visual day
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: python tools/benchmark.py --output qa-output/performance.json
       - name: Smoke-test the Windows executable and compute SHA-256
         # Default Windows platform plugin: exercises qwindows.dll as a player would.
         run: python tools/smoke_exe.py dist/IdleFarm.exe --output qa-output/packaged
@@ -67,12 +71,4 @@ jobs:
         shell: pwsh
         run: |
           $tag = '${{ github.ref_name }}'
-          $notes = @'
-          Primeira versão jogável do IdleFarm: cinco culturas, cinco instalações, doze espécies/raças, seis ambientes em pixel art, progresso offline e salvamento persistente.
-
-          Windows 64 bits. Baixe IdleFarm.exe e abra com dois cliques, sem Python e sem internet. O progresso fica em %APPDATA%\IdleFarm\save.json.
-
-          O executável foi gerado e iniciado duas vezes neste executor Windows, em pasta temporária e com save isolado. SHA256SUMS.txt contém o checksum. Evidências de testes, capturas e smoke test estão no artefato desta execução.
-          '@
-          $notes | Set-Content -Encoding utf8 release-notes.md
-          gh release create $tag dist/IdleFarm.exe dist/SHA256SUMS.txt --verify-tag --title "IdleFarm $tag" --notes-file release-notes.md
+          gh release create $tag dist/IdleFarm.exe dist/SHA256SUMS.txt qa-output/packaged/executable.json qa-output/performance.json --verify-tag --latest --title "IdleFarm $tag · uma nova fazenda" --notes-file docs/RELEASE_NOTES.md
