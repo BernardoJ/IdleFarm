@@ -31,6 +31,7 @@ def fresh(now):
         "harvests": 0,
         "last_accounted": now,
         "preferences": {"on_top": False, "scene": "fields"},
+        "tutorial": {"done": False, "plot": None},
     }
 
 
@@ -50,6 +51,21 @@ def validate(data):
             not isinstance(plot, dict) or plot.get("crop") not in CROPS or not number(plot.get("planted_at"))
         ):
             raise ValueError("Plantação inválida.")
+    # Metadata is optional so existing v1 saves keep their exact data and normal
+    # crop durations. Only farms created by this version receive the benefit.
+    if "tutorial" in data:
+        tutorial = data["tutorial"]
+        if not isinstance(tutorial, dict) or type(tutorial.get("done")) is not bool or "plot" not in tutorial:
+            raise ValueError("Tutorial inválido.")
+        index = tutorial["plot"]
+        if index is not None and (
+            tutorial["done"]
+            or type(index) is not int
+            or not 0 <= index < len(plots)
+            or plots[index] is None
+            or plots[index]["crop"] != "wheat"
+        ):
+            raise ValueError("Terreno de tutorial inválido.")
     for key, allowed in (("buildings", BUILDINGS), ("unlocked", CROPS)):
         values = data.get(key)
         if (

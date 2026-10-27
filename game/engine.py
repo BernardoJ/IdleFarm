@@ -6,7 +6,7 @@ from functools import wraps
 import time
 
 from config.data import ANIMALS, BUILDINGS, CATALOG, CROPS, SCENES, geometric_price
-from game.state import fresh, validate
+from game.state import fresh, number, validate
 from game.persistence import SaveProgress
 
 
@@ -48,12 +48,22 @@ def transaction(method):
 
 
 class Farm:
+    TUTORIAL_SECONDS = 60
+
     def __init__(self, store=None, clock=time.time):
         self.store, self.clock = store, clock
         data = store.load() if store else None
-        self.state = validate(data) if data else fresh(clock())
+        if data is None:
+            initial_time = clock()
+            if not number(initial_time):
+                raise GameError("O horário do sistema não permite iniciar uma fazenda.")
+            self.state = fresh(initial_time)
+        else:
+            self.state = validate(data)
         self.persistence = SaveProgress()
         self._persisted_state = deepcopy(data)
+        self.last_elapsed = 0
+        self.last_capped = False
         if data is not None:
             self.persistence.saved_generation = 0
         self.offline_reward = self.advance(offline=True)
@@ -61,7 +71,11 @@ class Farm:
 
     @property
     def now(self):
-        return max(self.clock(), self.state["last_accounted"])
+        sample = self.clock()
+        last = self.state["last_accounted"]
+        # Invalid clock readings cannot poison a valid save or overflow temporal
+        # calculations. The existing high-water mark also ignores backward jumps.
+        return max(sample, last) if number(sample) else last
 
     def save(self):
         if self.persistence.saving or self.store is None:
@@ -84,10 +98,18 @@ class Farm:
         return not self.persistence.dirty
 
     def advance(self, offline=False):
+        """Credit up to four hours for every gap between accounted updates.
+
+        The retained ``offline`` argument is source-compatible; resume, delayed
+        ticks and reopening intentionally use the same policy. Regular active
+        updates still accumulate unlimited total income over a long session.
+        """
         now = self.now
         last = self.state["last_accounted"]
         elapsed = now - last
-        credited = min(elapsed, CATALOG["offline_limit"]) if offline else elapsed
+        self.last_elapsed = elapsed
+        self.last_capped = elapsed > CATALOG["offline_limit"]
+        credited = min(elapsed, CATALOG["offline_limit"])
         end = last + credited
         gain = 0
         for animal in self.state["animals"]:
@@ -123,28 +145,65 @@ class Farm:
 
     def remaining(self, index):
         plot = self._plot(index)
-        return max(0, CROPS[plot["crop"]]["seconds"] - (self.now - plot["planted_at"])) if plot else 0
+        return max(0, self.crop_duration(index) - (self.now - plot["planted_at"])) if plot else 0
+
+    @property
+    def tutorial_phase(self):
+        tutorial = self.state.get("tutorial")
+        if tutorial is None or tutorial["done"]:
+            return "completed"
+        return "growing" if tutorial["plot"] is not None else "available"
+
+    @property
+    def tutorial_plot(self):
+        return self.state["tutorial"]["plot"] if self.tutorial_phase == "growing" else None
+
+    def planting_seconds(self, crop):
+        if not isinstance(crop, str) or crop not in CROPS:
+            raise GameError("Cultura desconhecida.")
+        return (
+            self.TUTORIAL_SECONDS
+            if crop == "wheat" and self.tutorial_phase == "available"
+            else CROPS[crop]["seconds"]
+        )
+
+    def crop_duration(self, index):
+        plot = self._plot(index)
+        if plot is None:
+            return 0
+        return self.TUTORIAL_SECONDS if index == self.tutorial_plot else CROPS[plot["crop"]]["seconds"]
 
     def stage(self, index):
         plot = self._plot(index)
         if not plot:
             return 0
         elapsed = self.now - plot["planted_at"]
-        total = CROPS[plot["crop"]]["seconds"]
+        total = self.crop_duration(index)
         # Compare elapsed time directly: 1 - remaining / duration loses precision at 10%.
         return 3 if elapsed >= total else 2 if elapsed >= total / 2 else 1 if elapsed >= total / 10 else 0
 
     @transaction
     def plant(self, index, crop):
-        if crop not in CROPS or crop not in self.state["unlocked"]:
-            raise GameError("Cultura ainda bloqueada.")
+        self._check_crop(crop)
         if self._plot(index) is not None:
             raise GameError("Este terreno já está ocupado.")
         self._pay(CROPS[crop]["seed"])
-        self.state["plots"][index] = {"crop": crop, "planted_at": self.now}
+        self._place_crop(index, crop, self.now)
+
+    def _check_crop(self, crop):
+        if not isinstance(crop, str) or crop not in CROPS or crop not in self.state["unlocked"]:
+            raise GameError("Cultura ainda bloqueada.")
+
+    def _place_crop(self, index, crop, planted_at):
+        self.state["plots"][index] = {"crop": crop, "planted_at": planted_at}
+        if crop == "wheat" and self.tutorial_phase == "available":
+            self.state["tutorial"]["plot"] = index
 
     @transaction
     def harvest(self, index):
+        return self._harvest(index)
+
+    def _harvest(self, index):
         plot = self._plot(index)
         if not plot or self.remaining(index) > 0:
             raise GameError("A plantação ainda não está pronta.")
@@ -152,9 +211,70 @@ class Farm:
         self.state["coins"] += gain
         self.state["earned"] += gain
         self.state["harvests"] += 1
+        if index == self.tutorial_plot:
+            self.state["tutorial"] = {"done": True, "plot": None}
         self.state["plots"][index] = None
         self._unlock()
         return gain
+
+    def ready_plots(self):
+        now = self.now
+        return [
+            index
+            for index, plot in enumerate(self.state["plots"])
+            if plot is not None and now - plot["planted_at"] >= self.crop_duration(index)
+        ]
+
+    def free_plots(self):
+        return [index for index, plot in enumerate(self.state["plots"]) if plot is None]
+
+    def next_free_plot(self, current):
+        self._plot(current)
+        free = self.free_plots()
+        return next((index for index in free if index > current), free[0] if free else None)
+
+    @transaction
+    def harvest_ready(self):
+        indices = self.ready_plots()
+        if not indices:
+            raise GameError("Não há plantações prontas para colher.")
+        reward = sum(self._harvest(index) for index in indices)
+        return {"count": len(indices), "reward": reward, "plots": indices}
+
+    def planting_quote(self, crop, quantity=None):
+        self._check_crop(crop)
+        free = self.free_plots()
+        if quantity is not None and (type(quantity) is not int or quantity < 0):
+            raise GameError("Quantidade de terrenos inválida.")
+        indices = free if quantity is None else free[:quantity]
+        balance = self.state["coins"]
+        seed = CROPS[crop]["seed"]
+        return {
+            "plots": indices,
+            "count": len(indices),
+            "cost": len(indices) * seed,
+            "balance": balance,
+            "affordable_count": min(len(free), balance // seed),
+            "available_count": len(free),
+            "crop": crop,
+        }
+
+    @transaction
+    def plant_batch(self, crop, indices):
+        self._check_crop(crop)
+        if not isinstance(indices, (list, tuple)) or not indices:
+            raise GameError("Não há terrenos disponíveis para plantar.")
+        if any(type(index) is not int for index in indices) or len(set(indices)) != len(indices):
+            raise GameError("Seleção de terrenos inválida.")
+        for index in indices:
+            if self._plot(index) is not None:
+                raise GameError("A seleção contém um terreno ocupado.")
+        cost = len(indices) * CROPS[crop]["seed"]
+        self._pay(cost)
+        now = self.now
+        for index in indices:
+            self._place_crop(index, crop, now)
+        return {"count": len(indices), "cost": cost, "plots": list(indices), "crop": crop}
 
     def expansion_price(self):
         return geometric_price(

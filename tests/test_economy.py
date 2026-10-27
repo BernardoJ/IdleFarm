@@ -17,8 +17,9 @@ def test_complete_gameplay(farm, clock):
     restored = Farm(farm.store, clock)
     assert restored.state == saved
     clock.skip(6 * 3600)
+    end = saved["last_accounted"] + CATALOG["offline_limit"]
     expected = sum(
-        (int((clock() - a["paid_until"]) // ANIMALS[a["species"]]["seconds"]))
+        (int((end - a["paid_until"]) // ANIMALS[a["species"]]["seconds"]))
         * a["count"]
         * ANIMALS[a["species"]]["reward"]
         for a in saved["animals"]
@@ -31,6 +32,10 @@ def test_complete_gameplay(farm, clock):
 
 @pytest.mark.parametrize("key", CROPS)
 def test_each_crop_exact_boundary_and_single_harvest(farm, clock, key):
+    # This regression checks normal catalogue durations; tutorial timing has its
+    # own coverage and must not silently shorten this economic boundary test.
+    farm.state["tutorial"] = {"done": True, "plot": None}
+    farm.save()
     earn_to(farm, clock, CROPS[key]["unlock"] + CROPS[key]["seed"])
     assert key in farm.state["unlocked"]
     before = farm.state["coins"]
@@ -73,8 +78,13 @@ def test_all_species_individual_payments(farm, clock, species):
     assert farm.advance() == animal["reward"]
     clock.skip(animal["seconds"] // 2)
     assert farm.advance() == animal["reward"]
-    clock.skip(animal["seconds"] * 10)
-    assert farm.advance() == 20 * animal["reward"]
+    # An active session receives all cycles, even when its total duration is
+    # longer than four hours; only individual unobserved gaps are capped.
+    gain = 0
+    for _ in range(10):
+        clock.skip(animal["seconds"])
+        gain += farm.advance()
+    assert gain == 20 * animal["reward"]
 
 
 def test_rejected_actions_are_atomic(farm):
