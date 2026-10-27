@@ -281,3 +281,65 @@ def test_first_installation_smoke_creates_new_profile_without_recovery(tmp_path)
     assert json.loads(report.read_text(encoding="utf-8"))["ok"]
     assert json.loads(save.read_text(encoding="utf-8"))["coins"] == 50
     assert not Path(str(save) + ".lock").exists()
+
+
+def test_recovery_text_remains_uncut_on_small_logical_screen_at_double_dpi(tmp_path):
+    root = Path(__file__).resolve().parents[1]
+    script = """
+import json
+from pathlib import Path
+import sys
+from PySide6.QtWidgets import QApplication
+from game.state import fresh
+from game.storage import RecoveryRequired, SaveStore
+from ui.recovery import RecoveryDialog
+
+app = QApplication([])
+app.setQuitOnLastWindowClosed(False)
+store = SaveStore(Path(sys.argv[1]) / 'save.json')
+store.path.write_bytes(b'broken primary')
+store.backup.write_text(json.dumps(fresh(1_800_000_000)), encoding='utf-8')
+primary, backup = store.path.read_bytes(), store.backup.read_bytes()
+try:
+    store.load()
+except RecoveryRequired as recovery:
+    dialog = RecoveryDialog(store, recovery)
+dialog.show()
+
+def check_text():
+    app.processEvents()
+    for item in (dialog.title, dialog.message, dialog.backup_info, dialog.status):
+        if not item.isHidden():
+            required = item.heightForWidth(item.width())
+            assert item.height() >= required, (item.text(), item.height(), required)
+    assert dialog.details.isReadOnly()
+    assert dialog.details.minimumHeight() < dialog.details.maximumHeight() == 150
+
+check_text()
+dialog.resize(520, 260)
+check_text()
+dialog.toggle_details()
+check_text()
+dialog.resize(520, 260)
+check_text()
+dialog.show_failure(OSError('simulated write failure'))
+check_text()
+dialog.toggle_details()
+check_text()
+dialog.toggle_details()
+check_text()
+dialog.close()
+assert store.path.read_bytes() == primary and store.backup.read_bytes() == backup
+"""
+    env = os.environ.copy()
+    env["QT_QPA_PLATFORM"] = "offscreen"
+    env["QT_SCALE_FACTOR"] = "2"
+    result = subprocess.run(
+        [sys.executable, "-c", script, str(tmp_path)],
+        cwd=root,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
