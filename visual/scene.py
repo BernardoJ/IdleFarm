@@ -17,10 +17,24 @@ ANIMAL_KEYS = tuple(ANIMALS)
 CROP_KEYS = tuple(CROPS)
 
 
-def field_layout(farm):
-    """Back-to-front plot anchors; stable ties retain their original draw order."""
+def field_layout(farm, selected=None):
+    """Bounded plot slots, keeping the selected owned plot and species diversity."""
+    plots = farm.state["plots"]
+    identifiers = farm.representatives("fields")[: len(POSITIONS)]
+    if type(selected) is int and 0 <= selected < len(plots) and selected not in identifiers:
+        if len(identifiers) < len(POSITIONS):
+            identifiers.append(selected)
+        else:
+            species = [plots[index]["crop"] for index in identifiers]
+            redundant = [slot for slot, crop in enumerate(species) if species.count(crop) > 1]
+            if not redundant and plots[selected] is not None:
+                # The incoming plot can replace its own species without losing diversity.
+                redundant = [slot for slot, crop in enumerate(species) if crop == plots[selected]["crop"]]
+            replacement = redundant[-1] if redundant else len(identifiers) - 1
+            identifiers[replacement] = selected
+    # Stable Y ties retain slot order, so drawing and reverse hit-testing agree.
     return sorted(
-        zip(farm.representatives("fields"), POSITIONS),
+        zip(identifiers, POSITIONS),
         key=lambda item: item[1][1],
     )
 
@@ -100,12 +114,15 @@ class Renderer:
         painter.setRenderHint(QPainter.SmoothPixmapTransform, False)
         self.light.beams(painter, scene, light, phase)
         if scene == "fields":
-            for identifier, (x, y) in field_layout(farm):
-                key = farm.state["plots"][identifier]["crop"]
-                stage = farm.stage(identifier)
-                sway = round(math.sin(phase * 0.8 + x)) if stage > 1 else 0
-                sprite = self.light.actor(self.crop_frames[key, stage], scene, x, y, light)
-                painter.drawImage(QPoint(x - CELL // 2 + sway, y - CELL + 8), sprite)
+            for identifier, (x, y) in field_layout(farm, selected):
+                plot = farm.state["plots"][identifier]
+                stage = 0
+                if plot is not None:
+                    key = plot["crop"]
+                    stage = farm.stage(identifier)
+                    sway = round(math.sin(phase * 0.8 + x)) if stage > 1 else 0
+                    sprite = self.light.actor(self.crop_frames[key, stage], scene, x, y, light)
+                    painter.drawImage(QPoint(x - CELL // 2 + sway, y - CELL + 8), sprite)
                 if identifier == selected:
                     painter.setPen(QColor("#ffdf91"))
                     # Corner marks keep the plants visible and identify the selected bed.
@@ -113,6 +130,9 @@ class Renderer:
                         xx = x + side * 37
                         painter.drawLine(xx, y + 5, xx - side * 7, y + 5)
                         painter.drawLine(xx, y + 5, xx, y - 2)
+                        if plot is None:
+                            painter.drawLine(xx, y - 30, xx - side * 7, y - 30)
+                            painter.drawLine(xx, y - 30, xx, y - 23)
                 if stage == 3 and int(phase * 2 + identifier) % 5 == 0:
                     painter.setPen(QColor("#fff2bd"))
                     painter.drawLine(x + 22, y - 51, x + 22, y - 45)
@@ -230,7 +250,7 @@ class SceneWidget(QWidget):
         if self.scene == "fields" and self.target.contains(event.position().toPoint()):
             x = (event.position().x() - self.target.x()) * WIDTH / self.target.width()
             y = (event.position().y() - self.target.y()) * HEIGHT / self.target.height()
-            for identifier, (px, py) in reversed(field_layout(self.farm)):
+            for identifier, (px, py) in reversed(field_layout(self.farm, self.selected)):
                 if abs(x - px) < 39 and py - 70 < y < py + 12:
                     self.plot_selected.emit(identifier)
                     self.drag_origin = None
