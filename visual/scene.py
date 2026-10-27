@@ -17,6 +17,14 @@ ANIMAL_KEYS = tuple(ANIMALS)
 CROP_KEYS = tuple(CROPS)
 
 
+def field_layout(farm):
+    """Back-to-front plot anchors; stable ties retain their original draw order."""
+    return sorted(
+        zip(farm.representatives("fields"), POSITIONS),
+        key=lambda item: item[1][1],
+    )
+
+
 def lighting(hour):
     """Continuous representative ambient tint, also exposed for preview tools."""
     first, second, amount = weights(hour)
@@ -92,8 +100,7 @@ class Renderer:
         painter.setRenderHint(QPainter.SmoothPixmapTransform, False)
         self.light.beams(painter, scene, light, phase)
         if scene == "fields":
-            entries = list(zip(farm.representatives(scene), POSITIONS))
-            for identifier, (x, y) in sorted(entries, key=lambda item: item[1][1]):
+            for identifier, (x, y) in field_layout(farm):
                 key = farm.state["plots"][identifier]["crop"]
                 stage = farm.stage(identifier)
                 sway = round(math.sin(phase * 0.8 + x)) if stage > 1 else 0
@@ -223,7 +230,7 @@ class SceneWidget(QWidget):
         if self.scene == "fields" and self.target.contains(event.position().toPoint()):
             x = (event.position().x() - self.target.x()) * WIDTH / self.target.width()
             y = (event.position().y() - self.target.y()) * HEIGHT / self.target.height()
-            for identifier, (px, py) in zip(self.farm.representatives("fields"), POSITIONS):
+            for identifier, (px, py) in reversed(field_layout(self.farm)):
                 if abs(x - px) < 39 and py - 70 < y < py + 12:
                     self.plot_selected.emit(identifier)
                     self.drag_origin = None
