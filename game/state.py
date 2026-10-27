@@ -1,12 +1,17 @@
 """Strict save validation; all money is integer-valued."""
 
 from copy import deepcopy
-import math
 from config.data import ANIMALS, BUILDINGS, CATALOG, CROPS, SCENES
+
+# Unix epoch through the final fractional second of year 9999 UTC. The upper
+# bound is the exclusive start of year 10000, not an arbitrary gameplay-age cap.
+MIN_TIMESTAMP = 0
+MAX_TIMESTAMP = 253_402_300_800
 
 
 def number(value):
-    return type(value) in (int, float) and math.isfinite(value) and value >= 0
+    """Validate saved timestamps without converting arbitrarily large integers."""
+    return type(value) in (int, float) and MIN_TIMESTAMP <= value < MAX_TIMESTAMP
 
 
 def integer(value):

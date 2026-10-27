@@ -4,7 +4,7 @@ import os
 import pytest
 from game.engine import Farm
 from game.state import fresh, validate
-from game.storage import SaveStore
+from game.storage import RecoveryRequired, SaveStore
 
 
 def test_failed_atomic_replace_keeps_previous_save(farm, monkeypatch):
@@ -29,20 +29,33 @@ def test_corruption_recovers_backup_without_destroying_bytes(farm, clock):
     before = deepcopy(farm.state)
     farm.plant(0, "wheat")  # Backup holds the preceding valid state.
     farm.store.path.write_text('{"coins":', encoding="utf-8")
+    backup = farm.store.backup.read_bytes()
+    with pytest.raises(RecoveryRequired) as failure:
+        Farm(farm.store, clock)
+    assert failure.value.backup_data == before
+    assert farm.store.path.read_text() == '{"coins":'
+    assert farm.store.backup.read_bytes() == backup
+    farm.store.restore_backup()  # Represents the player's explicit recovery choice.
     recovered = Farm(farm.store, clock)
     assert recovered.state == before
-    assert "recuperado" in farm.store.warning
-    assert list(farm.store.path.parent.glob("*.corrupt-*"))[0].read_text() == '{"coins":'
+    assert "restaurado" in farm.store.warning
+    assert any(path.read_text() == '{"coins":' for path in farm.store.path.parent.glob("*.corrupt-*"))
 
 
 def test_both_invalid_files_are_preserved(tmp_path, clock):
     store = SaveStore(tmp_path / "save.json")
     store.path.write_text("broken", encoding="utf-8")
     store.backup.write_text("null", encoding="utf-8")
+    with pytest.raises(RecoveryRequired) as failure:
+        Farm(store, clock)
+    assert failure.value.backup_data is None
+    assert store.path.read_text() == "broken" and store.backup.read_text() == "null"
+    assert not list(tmp_path.glob("*.corrupt-*"))
+    store.start_new(fresh(clock()))  # Only the explicit new-farm action authorizes replacement.
     farm = Farm(store, clock)
     assert farm.state["coins"] == 50
     assert len(list(tmp_path.glob("*.corrupt-*"))) == 2
-    assert "ilegível" in store.warning
+    assert "preservados" in store.warning
 
 
 @pytest.mark.parametrize(
