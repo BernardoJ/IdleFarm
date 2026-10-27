@@ -51,7 +51,7 @@ QMenu { background: #3c4431; border: 2px solid #b79b65; padding: 5px; }
 QMenu::item { padding: 8px 28px; }
 QMenu::item:selected { background: #806b46; }
 QLabel#current_area { font-size: 15px; font-weight: bold; color: #e6c780; }
-QComboBox { padding: 5px; border: 1px solid #ae9868; background: #3c4431; min-height: 19px; }
+QComboBox, QSpinBox { padding: 5px; border: 1px solid #ae9868; background: #3c4431; min-height: 19px; }
 QComboBox QAbstractItemView { background: #314a3b; selection-background-color: #7b724c; }
 QCheckBox { spacing: 4px; }
 QScrollArea { border: 2px solid #958359; background: #2c342b; }
@@ -90,6 +90,8 @@ class FarmWindow(QMainWindow):
             key: QIcon(QPixmap.fromImage(self.renderer.icon(key))) for key in (*SCENES, *CROPS, *ANIMALS)
         }
         self.messages = deque(maxlen=3)
+        self.selected_plot = 0
+        self._plot_ids = ()
         self.last_save = time.monotonic()
         self.last_save_attempt = self.last_save
         self.setWindowTitle(f"IdleFarm {VERSION} · um canto para cultivar")
@@ -247,7 +249,7 @@ class FarmWindow(QMainWindow):
         self.plant.setObjectName("plant")
         self.plant.clicked.connect(
             lambda: self.act(
-                lambda: self.farm.plant(self.plots.currentIndex(), self.crops.currentData()),
+                lambda: self.farm.plant(self.selected_plot, self.crops.currentData()),
                 "Semente plantada. A natureza cuida do tempo.",
             )
         )
@@ -257,6 +259,32 @@ class FarmWindow(QMainWindow):
         self.harvest.clicked.connect(self.do_harvest)
         row.addWidget(self.harvest)
         box.addLayout(row)
+        tools = QHBoxLayout()
+        self.ready_filter = QCheckBox("Prontas (0)")
+        self.ready_filter.setObjectName("ready_filter")
+        self.ready_filter.toggled.connect(self.refresh)
+        tools.addWidget(self.ready_filter)
+        self.next_free = QPushButton("Próximo livre")
+        self.next_free.setObjectName("next_free")
+        self.next_free.clicked.connect(self.go_next_free)
+        tools.addWidget(self.next_free)
+        tools.addStretch()
+        self.plot_tools_button = QToolButton()
+        self.plot_tools_button.setText("Ações em lote")
+        self.plot_tools_button.setObjectName("plot_tools")
+        self.plot_tools_menu = QMenu(self.plot_tools_button)
+        self.harvest_ready_action = self.plot_tools_menu.addAction("Colher prontas")
+        self.harvest_ready_action.triggered.connect(self.do_harvest_ready)
+        self.replant_action = self.plot_tools_menu.addAction("Plantar terrenos livres…")
+        self.replant_action.triggered.connect(self.do_replant_batch)
+        self.plot_tools_button.setMenu(self.plot_tools_menu)
+        self.plot_tools_button.setPopupMode(QToolButton.InstantPopup)
+        tools.addWidget(self.plot_tools_button)
+        box.addLayout(tools)
+        self.plot_tools_info = label("", True)
+        box.addWidget(self.plot_tools_info)
+        self.tutorial_info = label()
+        box.addWidget(self.tutorial_info)
         self.crop_info = label()
         box.addWidget(self.crop_info)
         self.plot_info = label()
@@ -335,9 +363,15 @@ class FarmWindow(QMainWindow):
             return None
 
     def do_harvest(self):
-        result = self.act(lambda: self.farm.harvest(self.plots.currentIndex()), "Colheita realizada!")
+        tutorial = self.farm.tutorial_phase == "growing"
+        result = self.act(lambda: self.farm.harvest(self.selected_plot), "Colheita realizada!")
         if result is not None:
-            self.notify(f"Colheita realizada · +{money(result)} moedas.")
+            text = f"Colheita realizada · +{money(result)} moedas."
+            if tutorial and self.farm.tutorial_phase == "completed":
+                text += " Tutorial concluído! Reinvista em sementes; os próximos trigos levam 1h."
+            if self.farm.persistence.dirty:
+                text += " Alterações ainda não salvas."
+            self.notify(text)
 
     def notify(self, text):
         self.messages.append((time.monotonic(), text))
@@ -371,19 +405,64 @@ class FarmWindow(QMainWindow):
             self.refresh_save_state()
 
     def select_plot(self, index):
-        self.plots.setCurrentIndex(index)
+        if type(index) is not int or not 0 <= index < len(self.farm.state["plots"]):
+            return
+        self.selected_plot = index
+        self.scene.selected = index
+        if self.scene.scene != "fields":
+            self.navigate("fields")
+        self.refresh()
+        self.scene.update()
 
     def plot_changed(self):
+        identifier = self.plots.currentData()
+        if identifier is not None:
+            self.selected_plot = identifier
         if hasattr(self, "scene"):
-            self.scene.selected = self.plots.currentIndex()
+            self.scene.selected = self.selected_plot
         if hasattr(self, "animal_rows"):
             self.refresh()
+
+    def go_next_free(self):
+        target = self.farm.next_free_plot(self.selected_plot)
+        if target is None:
+            self.notify("Todos os terrenos estão ocupados. Aguarde uma colheita.")
+            return
+        self.select_plot(target)
+        self.plots.setFocus()
+
+    def do_harvest_ready(self):
+        result = self.act(self.farm.harvest_ready, "Colheitas prontas recolhidas.")
+        if result is not None:
+            text = f"{result['count']} colheita(s) · +{money(result['reward'])} moedas."
+            if self.farm.persistence.dirty:
+                text += " Alterações ainda não salvas."
+            self.notify(text)
+
+    def do_replant_batch(self):
+        from ui.plot_tools import ReplantDialog
+
+        if not self.farm.free_plots():
+            self.notify("Nenhum terreno livre para plantar em lote.")
+            return
+        dialog = ReplantDialog(self.farm, self.crops.currentData(), parent=self)
+        if dialog.exec() != QDialog.Accepted or dialog.selection is None:
+            return
+        crop, plots = dialog.selection
+        result = self.act(lambda: self.farm.plant_batch(crop, plots), "Plantio em lote realizado.")
+        if result is not None:
+            text = f"{result['count']} terreno(s) com {CROPS[crop]['name']} · custo {money(result['cost'])} moedas."
+            if self.farm.persistence.dirty:
+                text += " Alterações ainda não salvas."
+            self.notify(text)
 
     def navigate(self, scene, save=True):
         if save:
             try:
                 self.farm.preference("scene", scene)
+                self.last_save = self.last_save_attempt = time.monotonic()
             except OSError as exc:
+                self.last_save_attempt = time.monotonic()
                 self.notify(str(exc))
         self.scene.scene = scene
         self.pages.setCurrentIndex(SCENES.index(scene))
@@ -395,7 +474,9 @@ class FarmWindow(QMainWindow):
 
     def toggle_top(self, checked):
         old = self.farm.state["preferences"]["on_top"]
-        result = self.act(lambda: self.farm.preference("on_top", checked), "Preferência de janela salva.")
+        result = self.act(
+            lambda: self.farm.preference("on_top", checked), "Preferência de janela atualizada."
+        )
         if result is None and self.farm.state["preferences"]["on_top"] != checked:
             self.top.blockSignals(True)
             self.top.setChecked(old)
@@ -416,7 +497,8 @@ class FarmWindow(QMainWindow):
             self.notify(f"Produção da fazenda · +{money(gained)} moedas.")
         failed = self.farm.persistence.last_error is not None
         due = time.monotonic() - self.last_save_attempt >= (10 if failed else 30)
-        if self.farm.persistence.dirty and (due or (gained and not failed)):
+        resumed = self.farm.last_elapsed >= 60
+        if self.farm.persistence.dirty and (due or ((gained or resumed) and not failed)):
             self.save_now()
         self.refresh()
 
@@ -429,10 +511,18 @@ class FarmWindow(QMainWindow):
         moment = datetime.now()
         self.time_info.setText(time_label(moment.hour) + moment.strftime(" · %H:%M"))
         self.plots.blockSignals(True)
-        current = max(0, self.plots.currentIndex())
-        while self.plots.count() < len(state["plots"]):
-            self.plots.addItem("")
-        for index, plot in enumerate(state["plots"]):
+        current = self.selected_plot
+        ready = self.farm.ready_plots()
+        free = self.farm.free_plots()
+        filtered = self.ready_filter.isChecked()
+        identifiers = sorted(set(ready) | {current}) if filtered else list(range(len(state["plots"])))
+        if tuple(identifiers) != self._plot_ids:
+            self.plots.clear()
+            for index in identifiers:
+                self.plots.addItem("", index)
+            self._plot_ids = tuple(identifiers)
+        for row, index in enumerate(identifiers):
+            plot = state["plots"][index]
             status = (
                 "livre"
                 if plot is None
@@ -440,9 +530,21 @@ class FarmWindow(QMainWindow):
                 + " · "
                 + ("pronta!" if not self.farm.remaining(index) else duration(self.farm.remaining(index)))
             )
-            self.plots.setItemText(index, f"{index + 1:02d} · {status}")
-        self.plots.setCurrentIndex(current)
+            outside = filtered and index == current and index not in ready
+            text = f"{index + 1:02d} · {status}" + (" · selecionado, fora do filtro" if outside else "")
+            if self.plots.itemText(row) != text:
+                self.plots.setItemText(row, text)
+        self.plots.setCurrentIndex(identifiers.index(current))
         self.plots.blockSignals(False)
+        self.scene.selected = current
+        self.ready_filter.setText(f"Prontas ({len(ready)})")
+        self.harvest_ready_action.setText(f"Colher prontas ({len(ready)})")
+        self.harvest_ready_action.setEnabled(bool(ready))
+        self.replant_action.setEnabled(bool(free))
+        self.plot_tools_info.setText(
+            f"{len(ready)} pronta(s) · {len(free)} terreno(s) livre(s)"
+            + (" · O selecionado está fora do filtro." if filtered and current not in ready else "")
+        )
         for i, (key, crop) in enumerate(CROPS.items()):
             unlocked = key in state["unlocked"]
             self.crops.model().item(i).setEnabled(unlocked)
@@ -450,9 +552,30 @@ class FarmWindow(QMainWindow):
         key = self.crops.currentData()
         crop = CROPS[key]
         plot = state["plots"][current]
-        self.crop_info.setText(
-            f"{crop['name']}  ·  semente {crop['seed']} moedas  ·  cresce em {duration(crop['seconds'])}  ·  colheita +{crop['reward']}"
+        seconds = (
+            self.farm.crop_duration(current)
+            if plot and plot["crop"] == key
+            else self.farm.planting_seconds(key)
         )
+        self.crop_info.setText(
+            f"{crop['name']}  ·  semente {crop['seed']} moedas  ·  cresce em {duration(seconds)}  ·  colheita +{crop['reward']}"
+        )
+        tutorial = self.farm.tutorial_phase
+        self.tutorial_info.setVisible(tutorial != "completed")
+        if tutorial == "available":
+            self.tutorial_info.setText(
+                "Primeira colheita: plante trigo. Só este primeiro ciclo cresce em 1 minuto; custo e recompensa são normais."
+            )
+        elif tutorial == "growing":
+            plot_id = self.farm.tutorial_plot
+            self.tutorial_info.setText(
+                f"Tutorial · terreno {plot_id + 1:02d}: "
+                + (
+                    "pronto! Selecione-o e clique em Colher. Reinvista as moedas em novas sementes."
+                    if self.farm.remaining(plot_id) == 0
+                    else "acompanhe o crescimento; ao ficar pronto, clique em Colher."
+                )
+            )
         self.plot_info.setText(
             "Terra preparada. Escolha a cultura e plante."
             if not plot
@@ -516,7 +639,7 @@ class FarmWindow(QMainWindow):
         box = QVBoxLayout(dialog)
         box.addWidget(
             label(
-                "Plante trigo e cenoura nos dois terrenos iniciais. O custo é debitado ao plantar; a recompensa só chega ao colher. Clique na plantação do cenário ou escolha seu terreno na lista. Todos os terrenos continuam funcionando, mesmo além dos cinco representantes visuais."
+                "Em uma nova fazenda, o primeiro trigo cresce em 1 minuto para ensinar plantio, espera e colheita. Depois, trigo leva 1h e cenoura 2h; custos e recompensas permanecem normais. O tutorial não se repete ao reabrir. Clique no cenário ou escolha seu terreno na lista; o selecionado aparece com destaque."
             )
         )
         box.addWidget(
@@ -531,7 +654,12 @@ class FarmWindow(QMainWindow):
         )
         box.addWidget(
             label(
-                "Ao reabrir, os animais produzem por até 4h. Plantações crescem durante todo o tempo real decorrido e esperam a colheita. O jogo salva automaticamente e após cada ação. Sem fontes de renda e com menos de 5 moedas, use as sementes de recomeço."
+                "Use Prontas para filtrar colheitas, Próximo livre para escolher onde plantar e Ações em lote para colher prontas ou plantar vários terrenos. O plantio em lote mostra quantidade, custo e saldo e exige confirmação. Se faltar dinheiro, você pode confirmar uma quantidade menor."
+            )
+        )
+        box.addWidget(
+            label(
+                "Ao reabrir ou retomar de suspensão, os animais produzem por até 4h do intervalo sem atualizações. Plantações crescem por todo o tempo real. O indicador de salvamento só confirma uma gravação concluída; em caso de erro, mantenha a janela aberta e tente salvar novamente. Saves inválidos abrem opções de recuperação sem substituir o progresso automaticamente."
             )
         )
         close = QPushButton("Vamos cultivar")
